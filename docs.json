@@ -22,6 +22,12 @@
               "tutorial/remote-access",
               "tutorial/imessage"
             ]
+          },
+          {
+            "group": "Going Deeper",
+            "pages": [
+              "tutorial/soul"
+            ]
           }
         ]
       }
