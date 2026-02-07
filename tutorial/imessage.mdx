@@ -1,99 +1,153 @@
 ---
 title: "iMessage Integration"
-description: "Connect your AI to iMessage and text it like a real contact from your phone."
+description: "Connect your AI to iMessage so you can text it like a friend from your iPhone."
 icon: "message"
 ---
 
-## No More Browser
+## The Real Interface
 
-In the last module, you set up Tailscale so you could access your AI's dashboard from anywhere. That's useful, but it still means opening a browser and typing a URL every time.
+In Module 3, you set up remote access through a browser. That works, but it still feels like using a tool. You open a URL, type in a box, wait for a response.
 
-What if you could just... text your AI? Open your Messages app, tap a conversation, and type. Just like messaging a friend.
+What if you could just... text your AI? Open Messages on your iPhone, tap a conversation, and send it a message like you would to a friend? No app, no browser, no URL to remember.
 
-That's what we're building right now. By the end of this module, your AI will show up as a real contact in iMessage. You'll text it, it'll text back. From your phone, your iPad, your Mac. Anywhere iMessage works.
+That's what iMessage integration gives you. Your AI becomes a contact in your Messages app. You text it. It texts back. From your lock screen, from Siri, from anywhere you can send a message.
+
+This is the module where your AI stops feeling like software and starts feeling like a partner.
+
+## How It Works
+
+OpenClaw talks to iMessage through a macOS helper app called [BlueBubbles](https://bluebubbles.app). Here's the flow:
+
+```
+Your iPhone (Messages app)
+        ↓
+   iCloud / iMessage relay
+        ↓
+   Messages.app on your Mac
+        ↓
+   BlueBubbles server (watches for new messages)
+        ↓
+   OpenClaw Gateway (processes + responds)
+        ↓
+   BlueBubbles → Messages.app → your iPhone
+```
+
+BlueBubbles runs alongside Messages on your Mac and acts as a bridge. When a message arrives, BlueBubbles tells OpenClaw. When OpenClaw responds, BlueBubbles sends it through Messages. Your iPhone sees it as a normal iMessage conversation.
 
 <Note>
-This module requires a Mac. iMessage is an Apple platform, so the machine running your OpenClaw gateway needs to be a Mac with Messages signed in. If you're running OpenClaw on Linux, you'll need a Mac somewhere on your network (even a cheap Mac Mini works). We cover that setup too.
+This requires a Mac that stays on and is signed into iMessage. If your OpenClaw gateway runs on Linux, you'll need a Mac somewhere on your network for the iMessage bridge. Other messaging options (Telegram, WhatsApp, Signal) don't have this requirement and work on any OS.
 </Note>
 
-## Two Ways to Connect
+## What You Need
 
-OpenClaw supports two methods for iMessage integration:
+- **A Mac** running macOS Sequoia (15) or newer, signed into iMessage
+- **BlueBubbles server** installed on that Mac
+- **OpenClaw** running (from Module 2)
+- **10 minutes** for setup
 
-**BlueBubbles (recommended)**: A free macOS server app that exposes iMessage through a REST API. Easier to set up, more features (reactions, editing, typing indicators), and actively maintained.
+The Mac running BlueBubbles can be the same machine running your OpenClaw gateway, or a different one. Same machine is simpler.
 
-**imsg (legacy)**: A lightweight CLI tool that reads iMessage directly from the Messages database. Simpler but fewer features. Still works, but new setups should use BlueBubbles.
+## Step 1: Install BlueBubbles
 
-This tutorial covers both. Start with BlueBubbles unless you have a reason not to.
-
-## Option A: BlueBubbles Setup
-
-### Step 1: Install BlueBubbles Server
-
-BlueBubbles is a free, open-source app that runs on your Mac and gives OpenClaw access to iMessage through a clean REST API.
+BlueBubbles is a free, open-source macOS app that gives your iMessage setup a REST API.
 
 <Steps>
   <Step title="Download BlueBubbles">
-    Go to [bluebubbles.app](https://bluebubbles.app) and download the macOS server app. Install it like any other Mac app (drag to Applications).
+    Go to [bluebubbles.app/install](https://bluebubbles.app/install) and download the macOS server.
   </Step>
-  <Step title="Launch and configure">
-    Open BlueBubbles from your Applications folder. It will walk you through initial setup:
-
-    - Sign into your Apple ID if Messages isn't already configured
-    - Enable the **Private API** when prompted (this allows advanced features like reactions and typing indicators)
-    - Set an **API password** when asked. Pick something strong. You'll need it for the OpenClaw config.
+  <Step title="Install and open it">
+    Drag BlueBubbles to your Applications folder and open it. Follow the setup wizard.
+  </Step>
+  <Step title="Enable the Web API">
+    In BlueBubbles settings, enable the local REST API. Set an API password. You'll need this password for OpenClaw.
   </Step>
   <Step title="Note the server URL">
-    BlueBubbles shows a local URL like `http://192.168.1.100:1234`. Copy this. You'll need it in a moment.
-
-    If you're running OpenClaw on the same Mac, you can use `http://localhost:1234` instead.
-  </Step>
-  <Step title="Grant permissions">
-    macOS will ask for permissions. Approve everything BlueBubbles requests. It needs:
-    - **Full Disk Access** to read the Messages database
-    - **Automation** permission to control Messages.app
+    BlueBubbles shows its local address, something like `http://192.168.1.100:1234`. Write this down.
   </Step>
 </Steps>
 
-<Warning>
-**Full Disk Access is non-negotiable.** Without it, BlueBubbles can't read your iMessage database. Go to System Settings → Privacy & Security → Full Disk Access and make sure BlueBubbles is listed and enabled.
+<Tip>
+If BlueBubbles asks about Firebase or Google Cloud setup, that's for their mobile app push notifications. You don't need it for OpenClaw. The local REST API is all that matters.
+</Tip>
 
-This is the #1 reason iMessage setups fail. If something isn't working, check FDA first.
+## Step 2: Grant macOS Permissions
+
+This is the step that trips up most people. macOS protects your Messages data behind several permission gates. You need to approve them all.
+
+### Full Disk Access
+
+BlueBubbles needs to read the Messages database. Without Full Disk Access, it can't see your messages.
+
+<Steps>
+  <Step title="Open System Settings">
+    Go to **System Settings > Privacy & Security > Full Disk Access**.
+  </Step>
+  <Step title="Add BlueBubbles">
+    Click the **+** button and add the BlueBubbles app from your Applications folder. Make sure the toggle is ON.
+  </Step>
+  <Step title="Add your terminal (if running OpenClaw from terminal)">
+    If you launch OpenClaw from Terminal or iTerm, add that app too. This ensures the OpenClaw gateway process inherits Full Disk Access.
+  </Step>
+</Steps>
+
+### Automation Permission
+
+When BlueBubbles first tries to send a message through Messages.app, macOS will pop up an Automation permission prompt. **You must click Allow.**
+
+<Warning>
+If you miss this prompt (it can appear behind other windows), sending will silently fail. If messages aren't going out, check **System Settings > Privacy & Security > Automation** and make sure BlueBubbles has permission to control Messages.
 </Warning>
 
-### Step 2: Configure OpenClaw
+### The FDA Gotcha
 
-Now tell OpenClaw to connect to BlueBubbles. You can do this through the wizard or by editing config directly.
+Full Disk Access is the number one support issue with iMessage integration. Here's what makes it tricky:
 
-**Using the wizard:**
+- macOS grants FDA per-process. If you start OpenClaw from a different terminal app, you might need to grant FDA again.
+- LaunchAgent daemons run in their own context. If OpenClaw starts on boot via a LaunchAgent, the daemon process needs FDA too.
+- SSH sessions have their own context. If you SSH into your Mac and run OpenClaw, you may need to grant FDA to the SSH process.
+
+**The fix:** Run an interactive command once in whatever context will be running OpenClaw. This forces the permission prompt:
+
+```bash
+# If using the legacy imsg CLI:
+imsg chats --limit 1
+```
+
+If a macOS dialog pops up asking for access, click Allow. After that, the background process will inherit the permission.
+
+## Step 3: Configure OpenClaw
+
+Now tell OpenClaw about your BlueBubbles server. The easiest way is through the onboarding wizard:
 
 ```bash
 openclaw onboard
 ```
 
-Select BlueBubbles when it asks about channels. Enter your server URL and password.
+Select BlueBubbles when prompted, and enter:
 
-**Or edit the config directly:**
+- **Server URL**: The BlueBubbles server address (e.g., `http://192.168.1.100:1234`)
+- **Password**: The API password you set in BlueBubbles
+- **DM policy**: Choose `pairing` (recommended, we'll explain why in a moment)
+
+If you prefer to configure it manually, edit your config:
 
 ```bash
 nano ~/.openclaw/openclaw.json
 ```
 
-Add the BlueBubbles channel config:
+Add the BlueBubbles channel:
 
 ```json
 {
   "channels": {
     "bluebubbles": {
       "enabled": true,
-      "serverUrl": "http://localhost:1234",
+      "serverUrl": "http://192.168.1.100:1234",
       "password": "your-bluebubbles-password"
     }
   }
 }
 ```
-
-Replace the password with whatever you set in BlueBubbles.
 
 Then restart the gateway:
 
@@ -101,188 +155,119 @@ Then restart the gateway:
 openclaw gateway restart
 ```
 
-### Step 3: Set Up the Webhook
+<Note>
+Replace the server URL and password with your actual values. If BlueBubbles and OpenClaw are on the same Mac, the URL is usually `http://localhost:1234` (check BlueBubbles settings for the exact port).
+</Note>
 
-BlueBubbles needs to know where to send incoming messages. OpenClaw runs a webhook endpoint for this.
+## Step 4: Set Up Webhooks
 
-If your gateway is on the same machine as BlueBubbles, the webhook URL is:
+BlueBubbles needs to know where to send incoming messages. You'll point it at your OpenClaw gateway.
 
-```
-http://localhost:18789/bluebubbles-webhook?password=your-bluebubbles-password
-```
+In BlueBubbles settings, add a webhook:
 
-If they're on different machines (connected via Tailscale, for example):
+- **URL**: `http://127.0.0.1:18789/bluebubbles-webhook?password=your-bluebubbles-password`
+- **Events**: All message events
 
-```
-http://your-gateway-ip:18789/bluebubbles-webhook?password=your-bluebubbles-password
-```
+If your gateway is on a different machine than BlueBubbles, use the gateway's IP or Tailscale hostname instead of `127.0.0.1`.
 
-In the BlueBubbles app, go to Settings and add this as your webhook URL.
+<Accordion title="Using Tailscale between BlueBubbles and OpenClaw">
+  If BlueBubbles runs on a Mac Mini and your gateway runs on a Linux server, connect them via your Tailscale network from Module 3:
 
-<Tip>
-If you set up Tailscale Serve in Module 3, you can use your HTTPS Tailscale URL for the webhook too. This is cleaner and more reliable for cross-machine setups.
-</Tip>
-
-### Step 4: Send Your First Message
-
-Open Messages on your phone (or any Apple device). Text your AI's phone number or iMessage email. Type "Hello!"
-
-Your AI should respond within a few seconds. If it does, you're done. You just gave your AI a phone number.
-
-If nothing happens, jump to the Troubleshooting section at the bottom of this page.
-
----
-
-## Option B: imsg Setup (Legacy)
-
-If you prefer a simpler, lighter-weight approach (or you're already using imsg), here's how to set it up.
-
-### Step 1: Install imsg
-
-```bash
-brew install steipete/tap/imsg
-```
-
-Verify it works:
-
-```bash
-imsg chats --limit 5
-```
-
-You should see a list of your recent iMessage conversations. If you get a permission error, you need to grant Full Disk Access (see the warning box above).
-
-<Warning>
-**Full Disk Access is required.** `imsg` reads from `~/Library/Messages/chat.db`. Without FDA, it can't access the database at all.
-
-Go to System Settings → Privacy & Security → Full Disk Access. Add your terminal app (Terminal, iTerm, Warp, etc.) and/or Node.js.
-
-If you're running OpenClaw as a LaunchAgent (which you should be from Module 2), the LaunchAgent process also needs FDA.
-</Warning>
-
-### Step 2: Configure OpenClaw
-
-Add iMessage to your config:
-
-```bash
-nano ~/.openclaw/openclaw.json
-```
-
-```json
-{
-  "channels": {
-    "imessage": {
-      "enabled": true,
-      "cliPath": "/opt/homebrew/bin/imsg",
-      "dbPath": "~/Library/Messages/chat.db"
-    }
-  }
-}
-```
-
-<Accordion title="Not sure where imsg is installed?">
-  Run this to find it:
-
-  ```bash
-  which imsg
+  ```
+  http://your-gateway.tailnet-name.ts.net:18789/bluebubbles-webhook?password=your-password
   ```
 
-  Common locations:
-  - `/opt/homebrew/bin/imsg` (Apple Silicon Mac via Homebrew)
-  - `/usr/local/bin/imsg` (Intel Mac via Homebrew)
+  Or use the Tailscale IP directly:
+
+  ```
+  http://100.x.x.x:18789/bluebubbles-webhook?password=your-password
+  ```
 </Accordion>
 
-Restart the gateway:
+## Step 5: Send Your First Message
+
+Restart the gateway to pick up the new config:
 
 ```bash
 openclaw gateway restart
 ```
 
-### Step 3: Grant Automation Permission
-
-The first time your AI tries to send an iMessage, macOS will show a popup asking if your terminal (or the OpenClaw process) is allowed to control Messages.app. **Click Allow.**
-
-If you're running OpenClaw as a background daemon and miss the popup, run a quick test in your terminal to trigger it:
+Check that the channel is connected:
 
 ```bash
-imsg send "+15555550123" "test from OpenClaw"
+openclaw channels status
 ```
 
-Replace the number with your own phone number. Approve the popup, and future sends will work automatically.
+You should see BlueBubbles listed as active. Now open Messages on your iPhone and send a text to your Mac's iMessage address (the email or phone number signed into Messages on the Mac running BlueBubbles).
 
-### Step 4: Send Your First Message
+The first time you message, you'll get a **pairing code** back instead of a real response. That's the security system working as intended.
 
-Text your Mac's iMessage number or email from your phone. Your AI should pick it up and respond.
+## Step 6: Approve Your Pairing
 
----
+OpenClaw uses a pairing system to control who can talk to your AI through iMessage. This is important because anyone who has your iMessage address could potentially text your AI. You don't want random people controlling your assistant.
 
-## Pairing: Controlling Who Can Talk to Your AI
+When you first text your AI, it replies with something like:
 
-By default, OpenClaw uses **pairing mode** for iMessage. This means when someone texts your AI for the first time, they get back a short pairing code instead of a response. Nothing else happens until you approve them.
+> "To pair with this assistant, provide this code to the owner: **ABCD1234**"
 
-This is important. You don't want random people (or spam) triggering your AI.
-
-Here's how it works:
-
-1. Someone texts your AI
-2. They get back a message like: "Send this code to get started: ABCD1234"
-3. They text that code back
-4. Meanwhile, you approve them from your terminal:
+Now approve yourself from the terminal:
 
 ```bash
 openclaw pairing list bluebubbles
 ```
 
-(Or `imessage` instead of `bluebubbles` if you're using the legacy channel.)
-
-This shows pending pairing requests. Approve one:
+This shows pending pairing requests with their codes. Find yours and approve it:
 
 ```bash
 openclaw pairing approve bluebubbles ABCD1234
 ```
 
-Now that person can talk to your AI. Their messages will be processed normally from now on.
+That's it. Send another message from your iPhone. This time, your AI responds for real.
 
 <Tip>
-For your own phone number, you'll go through pairing once. After that, you're permanently approved. You can also skip pairing entirely by adding yourself to the allowlist in your config:
+You only need to pair once per phone number or iMessage address. After approval, you're permanently on the allow list. If someone else texts your AI and you don't approve their code, they'll never get a response.
+</Tip>
+
+## DM Policies: Who Can Talk to Your AI?
+
+The `dmPolicy` setting controls how your AI handles incoming messages from new contacts:
+
+| Policy | Behavior |
+|--------|----------|
+| `pairing` | Unknown senders get a code. You approve or ignore. **(Recommended)** |
+| `allowlist` | Only pre-approved contacts can message. Everyone else is silently ignored. |
+| `open` | Anyone can message your AI. No approval needed. |
+| `disabled` | iMessage DMs are completely off. |
+
+Start with `pairing`. It's the right balance of security and convenience. You can pre-approve contacts too:
 
 ```json
 {
   "channels": {
     "bluebubbles": {
       "dmPolicy": "allowlist",
-      "allowFrom": ["+15555550123"]
+      "allowFrom": ["+15555550123", "friend@icloud.com"]
     }
   }
 }
 ```
 
-Replace with your actual phone number in E.164 format (country code included, no spaces).
-</Tip>
-
-### Other DM Policies
-
-You have four options:
-
-| Policy | Behavior |
-|--------|----------|
-| `pairing` (default) | Unknown senders get a code. You approve them manually. Safe and controlled. |
-| `allowlist` | Only numbers/emails in your `allowFrom` list can trigger the AI. Everyone else is ignored. |
-| `open` | Anyone can text your AI. Requires `allowFrom: ["*"]`. Use with caution. |
-| `disabled` | All inbound DMs are ignored. Useful if you only want group chat support. |
-
-For personal use, `pairing` or `allowlist` is the right choice. You probably want to approve a handful of people (yourself, your partner, maybe a close friend) and ignore everyone else.
+<Warning>
+Never set `dmPolicy: "open"` unless you truly want anyone with your iMessage address to have full access to your AI and its tools. Your AI can read files, run commands, and access your data. Treat DM access like giving someone the keys to your computer.
+</Warning>
 
 ## Group Chats
 
-Your AI can participate in iMessage group chats too. By default, group messages are filtered by an allowlist, and the AI only responds when mentioned.
+Your AI can participate in iMessage group chats too. By default, group access is set to `allowlist`, meaning the AI only responds in groups where an approved sender triggers it.
 
-To enable group chat:
+To enable groups:
 
 ```json
 {
   "channels": {
     "bluebubbles": {
-      "groupPolicy": "open",
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": ["+15555550123"],
       "groups": {
         "*": { "requireMention": true }
       }
@@ -291,220 +276,172 @@ To enable group chat:
 }
 ```
 
-With this config, your AI listens in all group chats but only responds when someone mentions it by name (based on your `mentionPatterns` in the agent config).
+With `requireMention: true`, your AI only responds in groups when someone mentions it by name. This prevents it from jumping into every conversation. Set mention patterns in your agent config:
 
 ```json
 {
-  "agents": {
-    "list": [{
-      "id": "main",
-      "groupChat": {
-        "mentionPatterns": ["@Alex", "hey Alex"]
-      }
-    }]
-  }
-}
-```
-
-Now anyone in a group chat can say "hey Alex, what's the weather?" and your AI will respond. Messages that don't mention Alex are ignored.
-
-<Note>
-Group chat can burn tokens fast. Every group message is context your AI needs to process. Start with `requireMention: true` and only open it up once you're comfortable with the costs.
-</Note>
-
-## Running on a Separate Mac
-
-Maybe your OpenClaw gateway runs on a Linux server or a different machine, but you need a Mac for iMessage (because Apple). No problem. You can run iMessage on one Mac and OpenClaw on another.
-
-**With BlueBubbles:** Just point `serverUrl` to the Mac's IP or Tailscale address instead of `localhost`. As long as both machines can reach each other (Tailscale makes this trivial), it works.
-
-```json
-{
-  "channels": {
-    "bluebubbles": {
-      "enabled": true,
-      "serverUrl": "http://mac-mini.tailnet-name.ts.net:1234",
-      "password": "your-password"
+  "messages": {
+    "groupChat": {
+      "mentionPatterns": ["@ai", "@assistant", "hey ai"]
     }
   }
 }
 ```
 
-**With imsg (legacy):** Create an SSH wrapper script so OpenClaw runs `imsg` over SSH on the remote Mac:
+## Advanced Features
 
-```bash
-#!/usr/bin/env bash
-exec ssh -T bot@mac-mini.tailnet-name.ts.net imsg "$@"
+BlueBubbles gives your AI some nice iMessage-native capabilities:
+
+- **Tapback reactions**: Your AI can react to messages with thumbs up, hearts, etc.
+- **Typing indicators**: The other person sees the typing bubble while your AI is thinking.
+- **Read receipts**: Your AI marks messages as read.
+- **Reply threading**: Your AI can reply to specific messages in a thread.
+- **Message effects**: Send messages with effects like "slam" or "invisible ink."
+
+These are enabled by default. You can toggle them in config:
+
+```json
+{
+  "channels": {
+    "bluebubbles": {
+      "sendReadReceipts": true,
+      "actions": {
+        "reactions": true,
+        "reply": true,
+        "sendWithEffect": true
+      }
+    }
+  }
+}
 ```
 
-Save this as `~/imsg-remote`, make it executable (`chmod +x ~/imsg-remote`), and point your config at it:
+## Alternative: Legacy imsg CLI
+
+OpenClaw also supports a lighter-weight iMessage integration through the `imsg` CLI tool. This is the older approach and still works, but BlueBubbles is recommended for new setups because it has richer features (reactions, typing indicators, easier webhook setup).
+
+If you want the simpler option:
+
+```bash
+brew install steipete/tap/imsg
+```
+
+Then configure:
 
 ```json
 {
   "channels": {
     "imessage": {
       "enabled": true,
-      "cliPath": "~/imsg-remote",
-      "dbPath": "/Users/bot/Library/Messages/chat.db",
-      "remoteHost": "bot@mac-mini.tailnet-name.ts.net"
+      "cliPath": "/usr/local/bin/imsg",
+      "dbPath": "/Users/yourname/Library/Messages/chat.db"
     }
   }
 }
 ```
 
-The `remoteHost` setting lets OpenClaw fetch attachments over SCP when someone sends you images or files.
+The `imsg` approach requires the same Full Disk Access permissions. The main tradeoff: simpler setup, fewer features. No typing indicators, no reactions, no webhooks.
 
-<Tip>
-A Mac Mini is perfect for this. It's small, quiet, power-efficient, and Apple sells refurbished ones for a fraction of new price. Stick it on your network, install Tailscale, and you have a dedicated iMessage bridge.
-</Tip>
+## Keeping It Running
 
-## The Dedicated Bot Account (Optional)
+Your AI is only reachable via iMessage when both OpenClaw and BlueBubbles are running. Here's how to make sure they survive reboots:
 
-By default, your AI sends messages from YOUR iMessage account. That means if someone texts your number, they might be talking to you or to your AI.
-
-If you want a clean separation, create a dedicated Apple ID for your AI:
-
-1. Create a new Apple ID (you'll need a separate email)
-2. Create a new macOS user on your Mac
-3. Sign into Messages with the bot Apple ID in that user account
-4. Configure OpenClaw to run `imsg` as that user (via SSH wrapper)
-
-This gives your AI its own iMessage identity. People can text your AI's number separately from yours. But honestly? Most people just use their own account and it works fine. The pairing system keeps things organized.
-
-## Making It Stick: The LaunchAgent
-
-If you followed Module 2 and used `--install-daemon` during onboarding, your Gateway already runs as a LaunchAgent. It starts automatically on boot and restarts if it crashes.
-
-Double-check it's running:
+**OpenClaw**: If you used `--install-daemon` during setup (Module 2), it already starts on boot. Verify:
 
 ```bash
 openclaw gateway status
 ```
 
-If it shows "running," you're set. Your iMessage integration will survive reboots, updates, and crashes. Your AI is always on.
+**BlueBubbles**: Configure it to launch on login. In BlueBubbles settings, enable "Start on Login" or add it to your Login Items (System Settings > General > Login Items).
 
-If it's not running as a daemon yet:
-
-```bash
-openclaw service install
-openclaw gateway start
-```
-
-<Accordion title="What about BlueBubbles? Does it auto-start?">
-  BlueBubbles has its own "Launch at Login" setting in its preferences. Enable it so the BlueBubbles server starts when your Mac boots up.
-
-  Between BlueBubbles auto-launching and the OpenClaw LaunchAgent, both sides of the iMessage bridge will be running automatically. No manual steps after a reboot.
-</Accordion>
+**Messages.app**: On some setups (especially VMs or headless Macs), Messages can go idle and stop processing incoming messages. If you notice messages not arriving, the fix is a small LaunchAgent that pokes Messages every few minutes to keep it alive. See the OpenClaw docs for the script.
 
 ## Troubleshooting
 
 <AccordionGroup>
-  <Accordion title="AI doesn't respond to iMessages">
-    **Check #1: Full Disk Access.** This is the cause 90% of the time. Go to System Settings → Privacy & Security → Full Disk Access. Make sure the relevant processes are listed and checked:
-    - For BlueBubbles: the BlueBubbles app
-    - For imsg: your terminal app (Terminal, iTerm, etc.) AND Node.js if running as a daemon
+  <Accordion title="Messages aren't arriving / AI doesn't respond">
+    Check the chain step by step:
 
-    **Check #2: Gateway is running.**
+    1. Is BlueBubbles running? Open it and check its status.
+    2. Is the webhook configured? BlueBubbles should show your OpenClaw webhook URL.
+    3. Is OpenClaw running? `openclaw gateway status`
+    4. Is the channel active? `openclaw channels status`
+    5. Are you paired? `openclaw pairing list bluebubbles` to check if your number is approved.
+
+    If everything looks good but messages still aren't flowing, check the gateway logs:
+
     ```bash
-    openclaw gateway status
+    openclaw logs
     ```
+  </Accordion>
 
-    **Check #3: Channel is connected.** Run a full status check:
-    ```bash
-    openclaw status --all
-    ```
+  <Accordion title="AI responds in the dashboard but not via iMessage">
+    The gateway is working, but the iMessage channel isn't connected. Check:
 
-    Look for the iMessage or BlueBubbles channel in the output. It should show as connected.
+    - BlueBubbles is running and the webhook points to the right URL
+    - The password in your OpenClaw config matches the BlueBubbles API password
+    - The gateway port in the webhook URL matches your actual gateway port (default 18789)
+  </Accordion>
 
-    **Check #4: Pairing.** If this is a new sender, they need to complete pairing first. Check pending requests:
+  <Accordion title="Full Disk Access not working">
+    FDA must be granted to the exact process that's reading the Messages database. If you changed how you launch OpenClaw (different terminal, SSH, LaunchAgent), you may need to grant FDA again.
+
+    Go to **System Settings > Privacy & Security > Full Disk Access** and make sure all relevant apps are listed and toggled ON:
+
+    - BlueBubbles
+    - Terminal / iTerm (if you launch OpenClaw from terminal)
+    - Node.js (sometimes needs to be added explicitly)
+
+    After granting FDA, restart both BlueBubbles and OpenClaw.
+  </Accordion>
+
+  <Accordion title="Pairing code not arriving">
+    Pairing codes expire after 1 hour, and OpenClaw limits pending requests to 3 per channel. If you've been testing a lot:
+
     ```bash
     openclaw pairing list bluebubbles
     ```
+
+    Clear old requests and try again. Also check that `dmPolicy` is set to `"pairing"` (not `"disabled"` or `"allowlist"` with an empty list).
   </Accordion>
 
-  <Accordion title="'Automation' permission popup never appears">
-    macOS only shows permission popups in interactive sessions. If OpenClaw is running as a background daemon (LaunchAgent), you might never see the popup.
+  <Accordion title="Sending works but receiving doesn't (or vice versa)">
+    This is usually a permissions issue. Sending requires **Automation** permission (BlueBubbles controlling Messages.app). Receiving requires **Full Disk Access** (reading the Messages database).
 
-    Fix: run a one-time interactive command in your terminal to trigger the popup:
-
-    ```bash
-    imsg send "+15555550123" "test"
-    ```
-
-    Or for BlueBubbles, send a test message through its web UI. Approve the Automation prompt when it appears. Future sends will work automatically, including from the daemon.
-  </Accordion>
-
-  <Accordion title="Messages work locally but not from phone">
-    This means your gateway is running and iMessage is connected, but the message isn't reaching your AI from your phone.
-
-    - Make sure the number or email you're texting matches what's signed into Messages on your Mac
-    - Check that the message actually arrives in Messages.app on your Mac (not just your phone)
-    - If using BlueBubbles, verify the webhook URL is correct and reachable
-
-    Remember: iMessage syncs across devices. When you text your AI's number, the message needs to land in Messages.app on the Mac running BlueBubbles/imsg.
-  </Accordion>
-
-  <Accordion title="Slow responses or timeouts">
-    - Check your AI model's response time. Opus 4.6 is powerful but can take a few seconds for complex requests.
-    - Check your internet connection. The AI model API call goes to Anthropic's servers.
-    - For BlueBubbles: check the BlueBubbles server logs for webhook delivery issues.
-    - For imsg: check the OpenClaw logs: `openclaw logs`
-  </Accordion>
-
-  <Accordion title="FDA granted but still getting permission errors">
-    macOS TCC (the permission system) can be finicky. Try:
-
-    1. Remove the app from Full Disk Access, then re-add it
-    2. Restart your Mac (yes, really, some TCC changes require a full restart)
-    3. If running as a LaunchAgent, the daemon process might need its own FDA entry. Check that the parent process (launchd-spawned node) has access, not just your terminal.
-
-    Nuclear option:
-    ```bash
-    sudo tccutil reset All
-    ```
-
-    This resets ALL privacy permissions on your Mac. You'll need to re-approve everything, but it clears any stuck TCC state.
+    Check both in System Settings > Privacy & Security.
   </Accordion>
 </AccordionGroup>
 
 ## What You Just Built
 
-Your AI is now reachable from your Messages app. No browser. No URL to remember. Just open a conversation and type.
-
-Here's the full picture of what's running:
+You can now text your AI from your iPhone. No app. No browser. Just Messages.
 
 ```
-Your iPhone / iPad / Mac (Messages app)
+You (iPhone Messages)
         ↓
-   iMessage (Apple's servers)
+   iMessage / iCloud
         ↓
-   Messages.app on your Mac
+   Messages.app (your Mac)
         ↓
-   BlueBubbles / imsg (reads from Messages database)
+   BlueBubbles (REST bridge)
         ↓
    OpenClaw Gateway
         ↓
-   AI Model + Tools
-        ↓
-   Reply sent back through iMessage
+   AI responds → BlueBubbles → Messages → your iPhone
 ```
 
-You text your AI. It reads the message, thinks, uses tools if needed, and texts you back. From anywhere in the world, as long as you have cellular or Wi-Fi.
+Think about what this means. You're standing in line at a grocery store and you text: "What's on my calendar tomorrow?" Your AI checks and replies in seconds. You're driving and ask Siri to send a message: "Hey, remind me to call the dentist at 3." Your AI sets a reminder. You're in bed and text: "Summarize the emails I got today." Done.
 
-Combined with Tailscale from Module 3, you now have:
-- **Browser access** from any device on your tailnet (Control UI)
-- **iMessage access** from any Apple device (just text it)
-- **Always-on** service that survives reboots (LaunchAgent daemon)
+This is your AI in your pocket. Always available, always private, always running on your own machine.
 
-This is where it starts feeling real. You've got an AI that's genuinely available, not something you have to sit down at a computer to use.
+And right now it's smart but generic. It doesn't know your name, your preferences, your communication style. It has the personality of a blank page.
 
-But right now, your AI is smart but generic. It doesn't know who you are. It doesn't have a personality beyond its defaults. In the next module, we'll fix that by building your AI's soul.
+Time to fix that.
 
 <Card
-  title="Next: The Soul of Your Agent"
+  title="Next: The Soul Architecture"
   icon="arrow-right"
   href="/tutorial/soul"
   horizontal
 >
-  Give your AI a personality, teach it about you, and build the file-based architecture that makes it truly yours.
+  Give your AI a personality, teach it who you are, and build memory that persists.
 </Card>
