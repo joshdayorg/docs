@@ -1,13 +1,18 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Learn OpenClaw",
+  "name": "Claw School",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#4AA8D8",
+    "light": "#4AA8D8",
+    "dark": "#4AA8D8",
+    "background": {
+      "dark": "#0A0E14",
+      "light": "#FFFFFF"
+    }
   },
   "favicon": "/favicon.svg",
+  "css": "/custom.css",
   "navigation": {
     "tabs": [
       {
@@ -60,14 +65,14 @@
   "navbar": {
     "links": [
       {
-        "label": "OpenClaw",
-        "href": "https://openclaw.ai"
+        "label": "Claw",
+        "href": "https://claw.sh"
       }
     ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/openclaw",
+      "x": "https://x.com/tryclawnow",
       "github": "https://github.com/openclaw/openclaw"
     }
   }

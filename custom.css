@@ -1,0 +1,76 @@
+/* Claw Design System — Mintlify Integration */
+/* Brand tokens from brand-system/brand/colors.css */
+
+:root {
+  /* Primary */
+  --claw-primary: #4AA8D8;
+  --claw-primary-dark: #2A7BA8;
+  --claw-primary-light: #D6EAF8;
+  --claw-primary-50: #EBF5FB;
+
+  /* Product Colors */
+  --claw-school: #4AD8A0;
+  --claw-kits: #D89A4A;
+  --claw-orchestrator: #8A4AD8;
+  --claw-forge: #D84A5E;
+  --claw-market: #4AD8D2;
+
+  /* Neutrals */
+  --claw-black: #0F1419;
+  --claw-gray-900: #1A1D21;
+  --claw-gray-800: #2C3038;
+  --claw-gray-700: #3D4450;
+  --claw-gray-600: #536471;
+  --claw-gray-500: #6B7D8A;
+  --claw-gray-400: #8899A6;
+  --claw-gray-300: #B0BEC5;
+  --claw-gray-200: #D1D9DD;
+  --claw-gray-100: #EFF3F4;
+  --claw-gray-50: #F7F9FA;
+
+  /* Signal */
+  --claw-success: #4AD88A;
+  --claw-warning: #D8C44A;
+  --claw-error: #D84A4A;
+
+  /* Spacing */
+  --claw-space-1: 4px;
+  --claw-space-2: 8px;
+  --claw-space-3: 12px;
+  --claw-space-4: 16px;
+  --claw-space-6: 24px;
+  --claw-space-8: 32px;
+
+  /* Radius */
+  --claw-radius-sm: 4px;
+  --claw-radius-md: 8px;
+  --claw-radius-lg: 12px;
+}
+
+/* Typography — prefer Inter for body, JetBrains Mono for code */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+code, pre, .code-block {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Dark mode surface refinement */
+[data-theme="dark"],
+.dark {
+  --claw-bg: #0A0E14;
+  --claw-surface: #161B22;
+  --claw-surface-elevated: #1C2128;
+  --claw-text: #E6EDF3;
+  --claw-text-muted: #8B949E;
+}
+
+/* Light mode */
+[data-theme="light"],
+:root {
+  --claw-bg: #FFFFFF;
+  --claw-surface: #FFFFFF;
+  --claw-text: #0F1419;
+  --claw-text-muted: #536471;
+}
