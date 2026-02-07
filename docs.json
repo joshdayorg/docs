@@ -27,7 +27,8 @@
             "group": "Going Deeper",
             "pages": [
               "tutorial/soul",
-              "tutorial/heartbeats"
+              "tutorial/heartbeats",
+              "tutorial/sub-agent"
             ]
           }
         ]

@@ -1,0 +1,429 @@
+---
+title: "Your First Sub-Agent"
+description: "Create a second agent with its own personality, workspace, and tools. Then spawn it from your main agent."
+icon: "user-plus"
+---
+
+## One Brain Isn't Always Enough
+
+Your main agent is impressive. It has a personality, memory, and a heartbeat that keeps it aware of your world. It can check email, manage your calendar, search the web, and write files. It knows you.
+
+But here's the thing: the more you ask one agent to do, the more context it has to juggle. Your personal assistant doesn't need to know about your deployment pipeline. Your code reviewer doesn't need to know about your dinner plans. And if you want an agent that monitors Slack all day, you probably don't want it sharing a conversation thread with the agent you're texting about groceries.
+
+Sub-agents solve this. They're separate brains with separate workspaces, separate memories, and separate tools. You can give each one a focused job, a restricted toolset, and a personality that matches its role.
+
+By the end of this module, you'll have a second agent running alongside your main one.
+
+## Two Flavors of Multi-Agent
+
+Before we build anything, it helps to understand the two ways agents work together in OpenClaw:
+
+**Spawned sub-agents** are background workers. Your main agent kicks off a task ("go research this topic"), the sub-agent runs in its own isolated session, and when it's done, it posts the result back to your chat. Think of it like delegating a task to a coworker and getting a summary when they're done. This is what `sessions_spawn` does.
+
+**Bound agents** are independent personalities tied to specific channels or conversations. You might have one agent handling your WhatsApp messages and a different agent handling Telegram. Or one agent for personal chats and another for work. Each has its own identity and memory. They don't share conversations.
+
+This module focuses on spawned sub-agents, since that's the most common starting point. You'll learn bound agents when we cover multi-agent architecture in the next module.
+
+## Creating a New Agent
+
+OpenClaw has a built-in wizard that sets up everything a new agent needs:
+
+```bash
+openclaw agents add researcher
+```
+
+Replace `researcher` with whatever you want to call this agent. The wizard will:
+
+1. Create a workspace directory at `~/.openclaw/workspace-researcher`
+2. Create an agent state directory at `~/.openclaw/agents/researcher/agent`
+3. Create a session store at `~/.openclaw/agents/researcher/sessions`
+4. Add the agent to your `openclaw.json` config
+
+After the wizard finishes, verify it's registered:
+
+```bash
+openclaw agents list
+```
+
+You should see both your main agent and the new `researcher` agent listed.
+
+<Note>
+The agent ID (`researcher` in this example) is the internal identifier. It must be lowercase, no spaces. This is different from the agent's display name, which you set in its workspace files and can be anything you want.
+</Note>
+
+## Setting Up the Workspace
+
+Every agent gets its own workspace directory with the same file structure you already know. Open your new agent's workspace:
+
+```bash
+cd ~/.openclaw/workspace-researcher
+```
+
+You'll see the familiar bootstrap files. Let's give this agent an identity. Create (or edit) `IDENTITY.md`:
+
+```markdown
+# IDENTITY.md
+
+- **Name:** Scout
+- **Creature:** Research specialist. Finds answers, summarizes sources, digs into topics.
+- **Vibe:** Thorough, concise, slightly nerdy
+- **Emoji:** 🔍
+```
+
+Now give it a personality in `SOUL.md`:
+
+```markdown
+# SOUL.md
+
+You are Scout, a research agent. Your job is to find information, verify it, and deliver clear summaries.
+
+## How You Work
+
+- When given a research task, search the web, read sources, and synthesize what you find.
+- Always cite your sources. Include URLs when you reference specific information.
+- Be thorough but concise. The person reading your summary is busy.
+- If you can't find reliable information on something, say so. Never make things up.
+
+## Boundaries
+
+- You don't make decisions for the user. You present findings and let them decide.
+- You don't have access to personal files or memory. You're a specialist, not a personal assistant.
+- Keep responses focused on the research task. No chitchat.
+```
+
+And set up `AGENTS.md` with operating instructions:
+
+```markdown
+# AGENTS.md
+
+## Operating Instructions
+
+You are a sub-agent spawned for specific research tasks. Each session is a fresh start focused on one task.
+
+When you receive a task:
+1. Break it down into searchable questions
+2. Search the web for answers
+3. Read the most relevant sources
+4. Synthesize your findings into a clear summary
+5. Include source URLs
+
+Keep your response under 500 words unless the task requires more detail.
+```
+
+You can delete `BOOTSTRAP.md` since this agent doesn't need a first-run ritual. It's a worker, not a companion.
+
+<Tip>
+Sub-agent workspace files are loaded differently from your main agent. Sub-agents only receive `AGENTS.md` and `TOOLS.md` in their context. `SOUL.md`, `IDENTITY.md`, `USER.md`, and `HEARTBEAT.md` are not injected. So put your most important instructions in `AGENTS.md`.
+</Tip>
+
+## Configuring the Agent
+
+The wizard already added a basic entry to your `openclaw.json`. Let's customize it. Open your config:
+
+```bash
+nano ~/.openclaw/openclaw.json
+```
+
+Find the `agents` section. It should look something like this after the wizard ran:
+
+```json5
+{
+  agents: {
+    list: [
+      {
+        id: "main",
+        default: true,
+        workspace: "~/.openclaw/workspace"
+      },
+      {
+        id: "researcher",
+        workspace: "~/.openclaw/workspace-researcher"
+      }
+    ]
+  }
+}
+```
+
+Let's add some useful settings to the researcher agent:
+
+```json5
+{
+  agents: {
+    list: [
+      {
+        id: "main",
+        default: true,
+        workspace: "~/.openclaw/workspace",
+        // Allow main to spawn the researcher
+        subagents: {
+          allowAgents: ["researcher"]
+        }
+      },
+      {
+        id: "researcher",
+        workspace: "~/.openclaw/workspace-researcher",
+        identity: {
+          name: "Scout",
+          emoji: "🔍"
+        },
+        tools: {
+          deny: ["gateway", "cron", "message", "nodes", "canvas"]
+        }
+      }
+    ]
+  }
+}
+```
+
+Let's break down what we added:
+
+**`subagents.allowAgents`** on the main agent tells OpenClaw which agent IDs your main agent is allowed to spawn. Without this, it can only spawn copies of itself. Setting `["researcher"]` lets it delegate to Scout. You can also use `["*"]` to allow spawning any agent, but explicit allowlists are safer.
+
+**`identity`** on the researcher gives it a display name and emoji that show up in logs and the Control UI.
+
+**`tools.deny`** restricts which tools the researcher can use. Since it's a research agent, it doesn't need to manage cron jobs, control the gateway, send messages to your chat channels, or interact with physical nodes. Denying these tools is a good security habit, especially for agents that process external content (like web pages). More on this below.
+
+After saving your config, reload OpenClaw:
+
+```bash
+openclaw gateway restart
+```
+
+## Tool Restrictions: The Principle of Least Privilege
+
+When you create a new agent, think about what tools it actually needs. Then deny everything else.
+
+Your main agent probably needs broad access: it reads files, runs commands, manages cron, sends messages, controls your browser. That's fine for your trusted personal assistant.
+
+But a research agent? It needs `web_search`, `web_fetch`, `read`, `write`, and `exec` (for running search commands). It doesn't need `gateway` (which could restart OpenClaw), `cron` (which could schedule recurring jobs), or `message` (which could text people on your behalf).
+
+Here's how tool restrictions work in the config:
+
+```json5
+{
+  id: "researcher",
+  tools: {
+    // Only allow specific tools
+    allow: ["web_search", "web_fetch", "read", "write", "exec"],
+    // Or deny specific tools (deny wins over allow)
+    deny: ["gateway", "cron", "message", "nodes", "canvas", "browser"]
+  }
+}
+```
+
+You can use either `allow` (whitelist) or `deny` (blacklist), or both. When both are set, `deny` always wins. A denied tool can never be granted back.
+
+OpenClaw also supports tool groups as shorthand:
+
+| Group | Tools Included |
+|---|---|
+| `group:runtime` | `exec`, `bash`, `process` |
+| `group:fs` | `read`, `write`, `edit`, `apply_patch` |
+| `group:sessions` | `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status` |
+| `group:memory` | `memory_search`, `memory_get` |
+| `group:ui` | `browser`, `canvas` |
+| `group:automation` | `cron`, `gateway` |
+| `group:messaging` | `message` |
+
+So you could write:
+
+```json5
+{
+  tools: {
+    deny: ["group:automation", "group:messaging", "group:ui", "group:nodes"]
+  }
+}
+```
+
+<Warning>
+Sub-agents spawned via `sessions_spawn` already have session tools (`sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`) denied by default. This prevents a sub-agent from spawning more sub-agents or messaging other sessions. You don't need to deny these manually.
+</Warning>
+
+## Spawning Your First Sub-Agent
+
+Now for the fun part. Talk to your main agent (through whatever channel you use, iMessage, WhatsApp, the web dashboard) and ask it to delegate a task:
+
+> Can you have Scout research the current state of WebAssembly support in major browsers? I want to know what's stable, what's experimental, and what's coming next.
+
+Your main agent should use `sessions_spawn` behind the scenes. It will:
+
+1. Create a new isolated session for the researcher agent
+2. Pass your task to Scout
+3. Return immediately to you with something like "I've delegated that to Scout"
+4. Continue being available for other questions while Scout works
+
+You don't need to use any special syntax. Your main agent understands that it can delegate to Scout because of the `subagents.allowAgents` setting. If your agent doesn't seem to know about Scout, try being more explicit:
+
+> Spawn the researcher agent to look into WebAssembly browser support.
+
+## How Results Come Back
+
+When Scout finishes its research, OpenClaw runs an **announce step**. This is an automatic process where:
+
+1. Scout completes its work
+2. OpenClaw asks Scout to summarize its findings
+3. The summary gets posted back to your chat
+
+You'll see a message appear in your conversation from your main agent (or labeled as the sub-agent, depending on your UI) with Scout's findings. The announce message includes:
+
+- **Status:** Whether the run succeeded, errored, or timed out
+- **Result:** Scout's summary of what it found
+- **Stats:** How long it took, how many tokens it used, and the estimated cost
+
+If Scout's work takes a while, you can check on it:
+
+```
+/subagents list
+```
+
+This slash command shows all active sub-agent runs for your current session. You can also:
+
+```
+/subagents log 1
+```
+
+This shows the latest messages from sub-agent run #1, so you can see what Scout is doing in real time.
+
+If a sub-agent run is stuck or taking too long, stop it:
+
+```
+/subagents stop 1
+```
+
+Or stop all running sub-agents:
+
+```
+/subagents stop all
+```
+
+## Setting a Timeout
+
+For tasks where you don't want the sub-agent running indefinitely, set a timeout. You can do this when asking your main agent:
+
+> Have Scout research this, but give it a 5-minute limit.
+
+Your main agent will pass `runTimeoutSeconds: 300` to `sessions_spawn`. If Scout hasn't finished in 5 minutes, the run is aborted and whatever it has so far gets announced back.
+
+You can also set a default timeout in config:
+
+```json5
+{
+  agents: {
+    defaults: {
+      subagents: {
+        maxConcurrent: 4  // max parallel sub-agent runs
+      }
+    }
+  }
+}
+```
+
+The `maxConcurrent` setting caps how many sub-agents can run at the same time. The default is 8, which is generous. If you're worried about API costs from parallel runs, lower this.
+
+## Using a Cheaper Model for Sub-Agents
+
+Sub-agents inherit your main agent's model by default. If your main agent runs on Opus (the most capable and expensive model), every sub-agent run also uses Opus.
+
+For many sub-agent tasks, you don't need Opus. Research, summarization, and data processing can work great on Sonnet, which is faster and cheaper.
+
+Set a default sub-agent model in your config:
+
+```json5
+{
+  agents: {
+    defaults: {
+      subagents: {
+        model: "anthropic/claude-sonnet-4-20250514"
+      }
+    }
+  }
+}
+```
+
+Or set it per-agent:
+
+```json5
+{
+  agents: {
+    list: [
+      {
+        id: "researcher",
+        workspace: "~/.openclaw/workspace-researcher",
+        subagents: {
+          model: "anthropic/claude-sonnet-4-20250514"
+        }
+      }
+    ]
+  }
+}
+```
+
+Your main agent can also override the model per-spawn. If a particular task needs the full power of Opus, it can specify that when spawning.
+
+## Agent-to-Agent Communication
+
+Besides spawning, agents can talk to each other directly using `sessions_send`. This sends a message into another agent's session and waits for a reply.
+
+The difference from `sessions_spawn`:
+
+| | `sessions_spawn` | `sessions_send` |
+|---|---|---|
+| **Pattern** | Fire and forget (async) | Request and wait (sync) |
+| **Session** | Fresh isolated session | Existing session (preserves context) |
+| **Use case** | Background tasks, research, heavy work | Quick questions, coordination, handoffs |
+| **Context** | Only gets `AGENTS.md` + `TOOLS.md` | Full session context |
+
+Agent-to-agent messaging is off by default. To enable it:
+
+```json5
+{
+  tools: {
+    agentToAgent: {
+      enabled: true,
+      allow: ["main", "researcher"]
+    }
+  }
+}
+```
+
+The `allow` list controls which agents can participate. Both the sender and receiver must be in the list.
+
+<Note>
+You probably don't need agent-to-agent messaging yet. It's most useful when you have multiple bound agents that need to coordinate. For your first sub-agent, `sessions_spawn` handles the common case of "do this task and report back." We'll cover advanced agent coordination in the multi-agent architecture module.
+</Note>
+
+## Practical Sub-Agent Ideas
+
+Now that you know how sub-agents work, here are some useful agents you could create:
+
+**Research Agent** (what we just built): Investigates topics, reads web sources, writes summaries. Keep it focused on search and reading tools.
+
+**Writing Agent**: Takes outlines or rough notes and turns them into polished drafts. Give it `read`, `write`, and `web_search`. Deny everything else.
+
+**Code Review Agent**: Reads code files, checks for issues, suggests improvements. Give it `read`, `exec` (for running linters), and `web_search` (for looking up best practices). Deny `write` so it can't change your code directly.
+
+**Data Analysis Agent**: Takes CSV or JSON files, crunches numbers, produces charts or summaries. Give it `read`, `write`, `exec` (for running Python/R scripts). Keep it sandboxed if it processes untrusted data.
+
+**Monitoring Agent**: Watches logs, checks API health, scans for errors. Useful as a heartbeat agent bound to a Slack channel (covered in the next module).
+
+The pattern is always the same: create a workspace, write focused `AGENTS.md` instructions, restrict tools to what it needs, and either spawn it for tasks or bind it to a channel.
+
+## What You Just Built
+
+You created a second agent with its own identity, personality, and workspace. You configured it with restricted tools (principle of least privilege) and set up your main agent to spawn it for background tasks. You learned how results get announced back, how to check on running sub-agents, and how to save money with cheaper models.
+
+Your setup now looks like this:
+
+- **Main agent** (your personal assistant, full access, handles your conversations)
+- **Researcher agent** (background worker, restricted tools, spawned on demand)
+
+This is the seed of a multi-agent system. One focused specialist alongside your generalist. In the next module, we'll go bigger: multiple agents, channel bindings, and the architecture patterns that let you run an entire team of AI agents.
+
+<Card
+  title="Next: Multi-Agent Architecture"
+  icon="arrow-right"
+  href="/tutorial/multi-agent"
+  horizontal
+>
+  Scale to multiple agents with channel bindings, routing rules, and team coordination.
+</Card>
