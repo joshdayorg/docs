@@ -1,0 +1,312 @@
+---
+title: "Installation & Setup"
+description: "Install OpenClaw, get your API key, and have your first conversation with your AI."
+icon: "download"
+---
+
+## What You Need
+
+Before we start, make sure you have:
+
+- **A Mac or Linux computer** (Windows works under WSL2, but macOS or Linux is the smoothest path)
+- **Node.js 22 or newer** installed
+- **An Anthropic API key** (we'll walk through getting one)
+- **15-20 minutes** of your time
+
+Not sure if you have Node? Check right now:
+
+```bash
+node --version
+```
+
+If you see `v22.x.x` or higher, you're good. If not, grab it from [nodejs.org](https://nodejs.org/) or use your package manager of choice (`brew install node` on macOS, `apt install nodejs` on Ubuntu/Debian).
+
+<Tip>
+You don't need a dedicated server for this. OpenClaw runs fine on the same Mac you use every day. The Gateway process is lightweight and stays out of your way.
+</Tip>
+
+## Step 1: Install OpenClaw
+
+One command does it all. This downloads the CLI, installs it globally, and launches the onboarding wizard:
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL https://openclaw.ai/install.sh | bash
+    ```
+  </Tab>
+  <Tab title="Windows (WSL2)">
+    ```bash
+    curl -fsSL https://openclaw.ai/install.sh | bash
+    ```
+  </Tab>
+</Tabs>
+
+The installer script handles Node detection and will walk you through setup. If you prefer to manage the install yourself:
+
+<Accordion title="Manual install via npm">
+  If you already have Node 22+ and want to skip the installer script:
+
+  ```bash
+  npm install -g openclaw@latest
+  openclaw onboard --install-daemon
+  ```
+
+  <Note>
+  If you see build errors mentioning `sharp`, try:
+  ```bash
+  SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install -g openclaw@latest
+  ```
+  </Note>
+</Accordion>
+
+<Accordion title="openclaw not found after install?">
+  If your terminal can't find the `openclaw` command, your npm global bin directory probably isn't in your PATH. Quick fix:
+
+  ```bash
+  echo 'export PATH="$(npm prefix -g)/bin:$PATH"' >> ~/.zshrc
+  source ~/.zshrc
+  ```
+
+  Replace `~/.zshrc` with `~/.bashrc` if you use bash.
+</Accordion>
+
+## Step 2: The Onboarding Wizard
+
+After installation, the onboarding wizard starts automatically. If you ran the manual install, or need to re-run it later:
+
+```bash
+openclaw onboard --install-daemon
+```
+
+The wizard walks you through a few things:
+
+<Steps>
+  <Step title="Choose a model and connect auth">
+    This is where you pick your AI model and provide an API key. We recommend **Anthropic Claude Opus 4.6** for the best experience. It has a 1 million token context window, excellent tool use, and the strongest reasoning of any model available.
+
+    You can also use other providers (OpenAI, OpenRouter, local models via Ollama), but this tutorial assumes Opus 4.6 for the examples.
+  </Step>
+  <Step title="Set your workspace">
+    The workspace is where your AI's files live: its personality, memory, operational rules. Default location is `~/.openclaw/workspace`, which works great for most people.
+  </Step>
+  <Step title="Configure the Gateway">
+    The Gateway is the always-running process that connects everything. The wizard sets the port (default `18789`), generates an auth token, and asks about Tailscale exposure (skip this for now, we cover it in Module 3).
+  </Step>
+  <Step title="Connect chat channels (optional)">
+    You can connect WhatsApp, Telegram, Discord, iMessage, Slack, or other channels right now, or skip this and do it later. For now, we'll use the built-in browser dashboard to chat.
+  </Step>
+  <Step title="Install the background service">
+    The `--install-daemon` flag sets up a LaunchAgent (macOS) or systemd unit (Linux) so your Gateway starts automatically on boot. This is important: you want your AI running even after you restart your computer.
+  </Step>
+</Steps>
+
+<Warning>
+Keep your API key safe. Never share it, commit it to Git, or paste it in public channels. OpenClaw stores it securely in your local auth profiles.
+</Warning>
+
+## Step 3: Get Your Anthropic API Key
+
+If you don't have an Anthropic API key yet, here's how to get one:
+
+<Steps>
+  <Step title="Go to console.anthropic.com">
+    Visit [console.anthropic.com](https://console.anthropic.com/) and create an account (or sign in).
+  </Step>
+  <Step title="Navigate to API Keys">
+    In the left sidebar, click **API Keys**.
+  </Step>
+  <Step title="Create a new key">
+    Click **Create Key**, give it a name like "OpenClaw", and copy the key. It starts with `sk-ant-`.
+  </Step>
+  <Step title="Add billing">
+    Anthropic requires a payment method. Go to **Settings > Billing** and add a card. You only pay for what you use.
+  </Step>
+</Steps>
+
+When the onboarding wizard asks for your Anthropic API key, paste it in.
+
+<Accordion title="How much does it cost?">
+  Pricing depends on usage. Opus 4.6 is Anthropic's most capable model and costs more per token than Sonnet or Haiku.
+
+  For casual personal use (a few conversations a day, some heartbeat checks), expect roughly $10-30/month. Heavy use with multiple agents running autonomously will cost more.
+
+  If you want to start cheap while learning, you can use a smaller model like `anthropic/claude-sonnet-4-5` and switch to Opus later. The tutorial will work with any model, but the results are noticeably better with Opus.
+
+  You can also use free models through OpenRouter. Run `openclaw models scan` after setup to discover free options.
+</Accordion>
+
+## Step 4: Verify Everything Works
+
+After the wizard finishes, let's make sure your Gateway is running:
+
+```bash
+openclaw gateway status
+```
+
+You should see output confirming the Gateway is active. If it's not running:
+
+```bash
+openclaw gateway start
+```
+
+Now run the diagnostics check:
+
+```bash
+openclaw doctor
+```
+
+This scans your config, checks for common issues, and tells you if anything needs fixing. Green checks across the board means you're good.
+
+## Step 5: Your First Conversation
+
+Time for the fun part. Open the built-in dashboard:
+
+```bash
+openclaw dashboard
+```
+
+This opens a browser window pointing to `http://127.0.0.1:18789/`. You'll see the Control UI, which is a full chat interface running on your machine.
+
+Type something. Say hello. Ask it a question. Ask it to write you a poem or explain quantum computing. This is your AI, running on your hardware, responding in real time.
+
+<Note>
+If the dashboard asks for authentication, paste your gateway token. You can find it with:
+```bash
+openclaw config get gateway.auth.token
+```
+</Note>
+
+**Try a few things to see what it can do:**
+
+- Ask it to read a file: "What's in my ~/.zshrc?"
+- Ask it to search the web: "What's the weather in San Francisco?"
+- Ask it to run a command: "How much disk space do I have?"
+- Ask it something personal: "Remember that my favorite color is blue"
+
+That last one is important. Your AI will write that preference to its memory files, and it'll remember it next time you talk. That's the memory system at work.
+
+## What Just Happened
+
+Let's look at what you actually built:
+
+```
+Your browser
+    ↓
+Control UI (localhost:18789)
+    ↓
+OpenClaw Gateway (background service)
+    ↓
+Anthropic API (Claude Opus 4.6)
+    ↓
+Tools (files, shell, web search...)
+```
+
+The **Gateway** is running as a background service on your machine. It handles:
+
+- Receiving your messages (from the browser, and later from chat apps)
+- Sending them to the AI model
+- Giving the AI access to tools (file system, shell, web search, browser)
+- Routing responses back to you
+- Managing sessions, memory, and context
+
+Your workspace (`~/.openclaw/workspace`) now has files in it. Take a look:
+
+```bash
+ls ~/.openclaw/workspace/
+```
+
+You'll see files like `SOUL.md`, `USER.md`, `IDENTITY.md`, `AGENTS.md`, and `MEMORY.md`. These are your AI's personality and memory files. We'll go deep on these in Module 5, but feel free to peek now:
+
+```bash
+cat ~/.openclaw/workspace/SOUL.md
+```
+
+That's your AI's personality. It's just a text file. You can edit it right now if you want. Change anything, save it, and your AI picks up the changes on the next conversation.
+
+## Useful Commands
+
+Here are the commands you'll use most often:
+
+| Command | What it does |
+|---------|-------------|
+| `openclaw gateway status` | Check if the Gateway is running |
+| `openclaw gateway start` | Start the Gateway service |
+| `openclaw gateway stop` | Stop the Gateway service |
+| `openclaw gateway restart` | Restart the Gateway |
+| `openclaw dashboard` | Open the browser Control UI |
+| `openclaw doctor` | Check for config issues |
+| `openclaw logs` | View Gateway logs |
+| `openclaw status` | Full status overview |
+| `openclaw configure` | Re-run configuration wizard |
+| `openclaw models status` | Check your current model and auth |
+
+<Tip>
+Run `openclaw help` anytime to see all available commands.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Gateway won't start">
+    Run `openclaw doctor` first. It catches most config issues. If that looks clean, check the logs:
+
+    ```bash
+    openclaw logs
+    ```
+
+    Common causes:
+    - Port 18789 already in use (another OpenClaw instance or another app)
+    - Invalid config in `~/.openclaw/openclaw.json`
+    - Missing API key
+  </Accordion>
+
+  <Accordion title="AI doesn't respond / timeout errors">
+    Check your API key is valid:
+
+    ```bash
+    openclaw models status
+    ```
+
+    If auth shows as missing or expired, re-run the config wizard:
+
+    ```bash
+    openclaw configure --section auth
+    ```
+  </Accordion>
+
+  <Accordion title="Dashboard shows 'unauthorized'">
+    Your browser needs the gateway auth token. Get it with:
+
+    ```bash
+    openclaw config get gateway.auth.token
+    ```
+
+    Paste that into the auth field in the Control UI settings.
+  </Accordion>
+
+  <Accordion title="'sharp' build errors during install">
+    If you have libvips installed globally (common on macOS via Homebrew), force prebuilt binaries:
+
+    ```bash
+    SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install -g openclaw@latest
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## You Just Built Something Real
+
+Take a second to appreciate this. You have an AI running on your own machine. It can read your files, run commands, search the web, and it remembers what you tell it. No cloud service owns your conversations. No subscription controls your access. It's yours.
+
+And this is just the beginning. Right now it's a smart assistant you talk to through a browser. By the end of this tutorial, it'll be reachable from your phone, running tasks while you sleep, and working alongside multiple other agents.
+
+Next up: we'll make your AI accessible from anywhere using Tailscale, so you don't have to be sitting at your computer to talk to it.
+
+<Card
+  title="Next: Remote Access with Tailscale"
+  icon="arrow-right"
+  href="/tutorial/remote-access"
+  horizontal
+>
+  Access your AI from anywhere in the world without opening a single port.
+</Card>
