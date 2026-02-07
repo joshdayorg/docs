@@ -1,0 +1,408 @@
+---
+title: "Remote Access with Tailscale"
+description: "Access your OpenClaw AI from anywhere in the world without opening a single port."
+icon: "globe"
+---
+
+## The Problem: Your AI is Stuck at Home
+
+Right now, your OpenClaw gateway is running on `localhost:18789`. Great if you're sitting in front of your computer. Not so great when you're:
+
+- At a coffee shop and want to ask your AI something
+- On your phone in bed
+- Working from your laptop while your gateway runs on a desktop
+- Traveling and need to check in with your AI
+
+You need remote access. And the obvious solutions are terrible:
+
+- **Port forwarding** exposes your machine to the entire internet
+- **Dynamic DNS** is fragile and still requires open ports
+- **Cloud VPNs** are slow and complicated to set up
+- **ngrok-style tunnels** add latency and a third party to your traffic
+
+There's a better way.
+
+## Why Tailscale
+
+[Tailscale](https://tailscale.com) creates an encrypted mesh network between your devices. Every device you install it on gets a private IP address and can talk to every other device, regardless of what network they're on. No open ports. No firewall rules. No configuration beyond "install and log in."
+
+Here's what makes it perfect for OpenClaw:
+
+- **Zero config networking**: install on two devices, they can talk. That's it.
+- **Works everywhere**: home Wi-Fi, coffee shop, cellular, hotel. Doesn't matter.
+- **Encrypted by default**: WireGuard encryption between all devices.
+- **Free for personal use**: up to 100 devices on the free plan.
+- **Identity-aware**: Tailscale knows WHO is connecting, not just what IP they're from.
+
+When you pair Tailscale with OpenClaw's built-in Tailscale Serve support, your gateway gets HTTPS, authentication, and remote access with about 5 minutes of setup.
+
+## Step 1: Install Tailscale
+
+You need Tailscale on at least two devices: the machine running your OpenClaw gateway, and whatever device you want to access it from (laptop, phone, etc.).
+
+<Tabs>
+  <Tab title="macOS">
+    Download the standalone variant from [tailscale.com/download/mac](https://tailscale.com/download/mac). This is the recommended version for macOS.
+
+    The Mac App Store version works too, but the standalone variant supports `tailscale serve` and `tailscale funnel`, which you'll need.
+
+    After installing, open Tailscale from your Applications folder and sign in. The menu bar icon should show a connected status.
+
+    Verify from the terminal:
+
+    ```bash
+    tailscale status
+    ```
+
+    You should see your machine listed with a `100.x.x.x` IP address. That's your Tailscale IP.
+  </Tab>
+  <Tab title="Linux">
+    Tailscale provides packages for most distributions:
+
+    ```bash
+    curl -fsSL https://tailscale.com/install.sh | sh
+    ```
+
+    Then bring it up:
+
+    ```bash
+    sudo tailscale up
+    ```
+
+    This prints a URL to authenticate in your browser. After you log in, check the status:
+
+    ```bash
+    tailscale status
+    ```
+
+    You should see your machine with a `100.x.x.x` address.
+  </Tab>
+</Tabs>
+
+<Note>
+Install Tailscale on your phone too. The iOS and Android apps are free. Search "Tailscale" in your app store, install, and sign in with the same account. Your phone is now on your tailnet.
+</Note>
+
+## Step 2: Verify Your Tailnet
+
+Before configuring OpenClaw, make sure your devices can see each other. On your OpenClaw machine, run:
+
+```bash
+tailscale status
+```
+
+You should see all your devices listed. Something like:
+
+```
+100.64.0.1    my-macbook       joshuaday@  macOS   -
+100.64.0.2    my-iphone        joshuaday@  iOS     -
+```
+
+If both devices show up, your tailnet is working. They can already communicate over encrypted connections. No port forwarding needed.
+
+<Accordion title="Devices not showing up?">
+  Make sure both devices are signed into the same Tailscale account. On macOS, check the menu bar icon. On Linux, run `sudo tailscale up` if you haven't already. On your phone, open the Tailscale app and make sure it's connected.
+
+  If you're on a corporate network that blocks UDP, Tailscale falls back to relay servers (called DERP). It still works, just slightly slower.
+</Accordion>
+
+## Step 3: Configure OpenClaw for Tailscale Serve
+
+OpenClaw has built-in Tailscale integration. You don't need to manually run `tailscale serve` commands. Just tell OpenClaw to use it.
+
+The simplest approach: start the gateway with the Tailscale flag:
+
+```bash
+openclaw gateway --tailscale serve
+```
+
+That's it. OpenClaw will:
+
+1. Keep the gateway bound to `127.0.0.1` (not exposed to your local network)
+2. Tell Tailscale to serve HTTPS traffic on your tailnet
+3. Set up the reverse proxy automatically
+
+Your gateway is now accessible at:
+
+```
+https://your-machine-name.tailnet-name.ts.net/
+```
+
+You can find your exact URL with:
+
+```bash
+tailscale status
+```
+
+Look for the MagicDNS name of your OpenClaw machine.
+
+<Tip>
+You can also set this in your config so it persists across restarts. We'll do that in a moment.
+</Tip>
+
+## Step 4: Make It Permanent
+
+You don't want to pass `--tailscale serve` every time. Let's add it to your config:
+
+```bash
+openclaw configure
+```
+
+When the wizard asks about Tailscale, select **serve** mode. This writes the setting to your config file so the gateway always starts with Tailscale Serve enabled.
+
+If you prefer to edit the config directly:
+
+```bash
+nano ~/.openclaw/openclaw.json
+```
+
+Add or update the gateway section:
+
+```json
+{
+  "gateway": {
+    "bind": "loopback",
+    "tailscale": {
+      "mode": "serve"
+    }
+  }
+}
+```
+
+Then restart the gateway:
+
+```bash
+openclaw gateway restart
+```
+
+From now on, every time your gateway starts (including after reboots, since you installed the daemon in Module 2), Tailscale Serve will be active.
+
+## Step 5: Access from Another Device
+
+Open a browser on your laptop, phone, or any device on your tailnet and navigate to:
+
+```
+https://your-machine-name.tailnet-name.ts.net/
+```
+
+You should see the OpenClaw Control UI, the same dashboard you used in Module 2, but now accessible from anywhere your Tailscale network reaches.
+
+Try it from your phone. Open Safari or Chrome, type the URL, and you're chatting with your AI from your pocket. No VPN app to toggle. No port to remember. Just a URL that works.
+
+<Note>
+The HTTPS certificate is handled automatically by Tailscale. No need to set up Let's Encrypt or deal with certificate renewals. It just works.
+</Note>
+
+## Authentication: Who Gets In?
+
+By default, when you use Tailscale Serve mode, OpenClaw can authenticate requests using Tailscale's identity headers. This means if you're on your tailnet, you might not need to enter a token or password at all.
+
+Here's how the authentication layers work:
+
+**Tailscale identity auth** (default with Serve): Tailscale tells OpenClaw WHO is connecting. Since only your devices are on your tailnet, this is already secure. OpenClaw verifies the identity by checking Tailscale headers against the local Tailscale daemon.
+
+**Token auth** (belt-and-suspenders): If you want an extra layer, you can require a gateway token even for Tailscale connections:
+
+```json
+{
+  "gateway": {
+    "bind": "loopback",
+    "tailscale": { "mode": "serve" },
+    "auth": {
+      "allowTailscale": false,
+      "mode": "token",
+      "token": "your-gateway-token"
+    }
+  }
+}
+```
+
+**Password auth**: For shared access or simpler setups:
+
+```json
+{
+  "gateway": {
+    "auth": {
+      "mode": "password",
+      "password": "your-password-here"
+    }
+  }
+}
+```
+
+<Warning>
+If you set `allowTailscale: true` (the default with Serve mode), anyone on your tailnet can access the gateway without a token. For personal tailnets where you control every device, this is fine. If you've shared your tailnet with others, set `allowTailscale: false` and require a token.
+</Warning>
+
+For most people running a personal setup, the default Tailscale identity auth is plenty secure. Your tailnet is YOUR network. Only devices you've explicitly added can reach it.
+
+## Alternative: Direct Tailnet Bind
+
+If you don't want to use Tailscale Serve (maybe you want plain HTTP instead of HTTPS, or you're troubleshooting), you can bind the gateway directly to your Tailscale IP:
+
+```json
+{
+  "gateway": {
+    "bind": "tailnet",
+    "auth": {
+      "mode": "token",
+      "token": "your-gateway-token"
+    }
+  }
+}
+```
+
+This makes the gateway accessible at `http://your-tailscale-ip:18789/` from any device on your tailnet. Note two differences from Serve mode:
+
+1. No HTTPS (plain HTTP)
+2. Token auth is required (no Tailscale identity headers)
+3. `localhost:18789` will NOT work on the gateway machine itself
+
+For most people, Tailscale Serve is the better option. It gives you HTTPS, identity auth, and keeps localhost working for local access.
+
+## What About Public Access? (Funnel)
+
+Tailscale Funnel exposes your service to the public internet, not just your tailnet. OpenClaw supports this too:
+
+```bash
+openclaw gateway --tailscale funnel --auth password
+```
+
+With Funnel, anyone on the internet can reach your gateway at your Tailscale domain. For this reason, OpenClaw **requires** password auth when using Funnel. You don't want a publicly accessible AI gateway with no authentication.
+
+<Warning>
+Only use Funnel if you have a specific reason to expose your gateway publicly. For personal use, Tailscale Serve (tailnet-only) is safer and simpler. Funnel is useful for demos, webhooks, or sharing access with people who aren't on your tailnet.
+</Warning>
+
+Store your password in an environment variable instead of your config file:
+
+```bash
+export OPENCLAW_GATEWAY_PASSWORD="your-strong-password"
+```
+
+Add that to your shell profile (`~/.zshrc` or `~/.bashrc`) so it persists.
+
+## The SSH Fallback
+
+Don't want to use Tailscale's Serve or Funnel features? You can always use a plain SSH tunnel. This is the universal fallback that works with any network setup:
+
+```bash
+ssh -N -L 18789:127.0.0.1:18789 user@your-tailscale-ip
+```
+
+This forwards your local port 18789 to the remote machine's gateway. Then open `http://127.0.0.1:18789/` in your browser and you're connected, as if you were sitting at the remote machine.
+
+The SSH approach is great for:
+- Quick one-off connections
+- Machines where you can't install Tailscale Serve
+- Debugging (you can see exactly what's happening)
+
+But for everyday use, Tailscale Serve is simpler. Set it once, forget it.
+
+## Phone Access
+
+Here's the payoff. With Tailscale on your phone and Serve running on your gateway:
+
+1. Open your phone browser
+2. Go to `https://your-machine-name.tailnet-name.ts.net/`
+3. Chat with your AI
+
+That's real remote access. No app needed (though the Tailscale app must be running in the background for the network connection). You're texting your AI through a browser from anywhere on earth.
+
+<Tip>
+Add the URL to your phone's home screen for quick access. On iPhone, open the page in Safari, tap the share button, and select "Add to Home Screen." It'll look and feel like a native app.
+</Tip>
+
+In the next module, we'll go one step further: connecting your AI to iMessage so you can text it like a real contact in your Messages app. No browser needed at all.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="'tailscale serve' errors or HTTPS not working">
+    Tailscale Serve requires HTTPS to be enabled for your tailnet. If it's not enabled, the CLI will prompt you to allow it. Follow the link it provides and approve HTTPS certificates.
+
+    Make sure you're using the standalone Tailscale variant on macOS, not the Mac App Store version. The App Store version has limited CLI support.
+  </Accordion>
+
+  <Accordion title="Can't reach the gateway from another device">
+    First, confirm both devices are on the same tailnet:
+
+    ```bash
+    tailscale status
+    ```
+
+    Both should be listed. If one is missing, check that Tailscale is running and connected on that device.
+
+    Next, try pinging the gateway machine from the other device:
+
+    ```bash
+    ping your-machine-name.tailnet-name.ts.net
+    ```
+
+    If ping works but the browser doesn't load, the gateway might not be running. SSH in and check:
+
+    ```bash
+    openclaw gateway status
+    ```
+  </Accordion>
+
+  <Accordion title="Slow connection or high latency">
+    If both devices are on the same local network, Tailscale uses direct connections (very fast). If they're on different networks, Tailscale tries to establish a direct WireGuard tunnel. Sometimes NAT or firewall rules prevent this, and traffic routes through Tailscale's relay servers (DERP).
+
+    Check your connection type:
+
+    ```bash
+    tailscale ping your-other-device
+    ```
+
+    If it says "via DERP," that's relayed. It still works, just adds some latency. For most use cases (chat with your AI), the latency is barely noticeable.
+  </Accordion>
+
+  <Accordion title="Gateway works locally but not via Tailscale">
+    Make sure you're using `bind: "loopback"` with Tailscale Serve (not `bind: "tailnet"`). Serve proxies traffic from Tailscale to localhost, so the gateway needs to be listening on localhost.
+
+    If you're using `bind: "tailnet"`, the gateway listens ONLY on the Tailscale IP. Localhost won't work. This is the opposite of what most people want.
+
+    The recommended config is:
+
+    ```json
+    {
+      "gateway": {
+        "bind": "loopback",
+        "tailscale": { "mode": "serve" }
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## What You Just Built
+
+Your OpenClaw gateway is now accessible from any device on your Tailscale network. Encrypted, authenticated, and requiring zero port forwarding or firewall changes.
+
+Here's the updated picture:
+
+```
+Your phone / laptop / tablet (anywhere on your tailnet)
+        ↓ (encrypted WireGuard tunnel)
+   Tailscale Serve (HTTPS reverse proxy)
+        ↓
+   OpenClaw Gateway (127.0.0.1:18789)
+        ↓
+   AI Model + Tools
+```
+
+You can talk to your AI from a coffee shop, from your couch, from another country. The gateway stays safe on localhost. Tailscale handles all the networking.
+
+But opening a browser every time is still a bit clunky, right? What if you could just... text your AI? Like sending a message to a friend?
+
+That's exactly what we're doing next.
+
+<Card
+  title="Next: iMessage Integration"
+  icon="arrow-right"
+  href="/tutorial/imessage"
+  horizontal
+>
+  Connect your AI to iMessage and text it like a real contact from your phone.
+</Card>

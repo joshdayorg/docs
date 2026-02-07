@@ -18,7 +18,8 @@
             "pages": [
               "index",
               "tutorial/introduction",
-              "tutorial/installation"
+              "tutorial/installation",
+              "tutorial/remote-access"
             ]
           }
         ]
