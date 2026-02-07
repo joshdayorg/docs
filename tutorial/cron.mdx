@@ -1,0 +1,494 @@
+---
+title: "Cron Jobs & Scheduling"
+description: "Schedule recurring tasks, one-shot reminders, and automated reports with precise timing."
+icon: "clock"
+---
+
+## The Calendar for Your AI
+
+In Module 6, you learned the difference between heartbeats (consciousness loop) and cron (calendar appointments). Heartbeats handle ambient awareness. Cron handles everything that needs to happen at a specific time.
+
+This module goes deep on cron. By the end, you'll know how to:
+
+- Set one-shot reminders ("remind me in 20 minutes")
+- Schedule recurring tasks ("daily briefing at 7 AM")
+- Deliver results to specific channels
+- Use model overrides for different job types
+- Combine cron with heartbeats for a complete automation layer
+
+## How Cron Works in OpenClaw
+
+The Gateway has a built-in scheduler. Cron jobs are stored on disk (`~/.openclaw/cron/jobs.json`), survive restarts, and run inside the Gateway process. No external scheduler needed.
+
+Every cron job has two parts:
+
+1. **When** to run (a schedule)
+2. **What** to do (a payload)
+
+And optionally:
+
+3. **Where** to deliver results (a channel + recipient)
+4. **Which agent** runs it (in multi-agent setups)
+
+## Your First Cron Job: A Simple Reminder
+
+The fastest way to get started. Set a reminder that fires in 20 minutes:
+
+```bash
+openclaw cron add \
+  --name "Meeting prep" \
+  --at "20m" \
+  --session main \
+  --system-event "Reminder: your meeting with the design team starts in 10 minutes. Review the mockups." \
+  --wake now
+```
+
+That's it. In 20 minutes, your AI gets a system event injected into its main session and immediately runs a heartbeat to process it. It'll text you the reminder through whatever channel you last used.
+
+Let's break down what each flag does:
+
+| Flag | Meaning |
+|------|---------|
+| `--name` | Human-readable label for the job |
+| `--at "20m"` | Fire once, 20 minutes from now |
+| `--session main` | Run in the main session (with full context) |
+| `--system-event` | The text to inject as a system event |
+| `--wake now` | Trigger an immediate heartbeat to process it |
+
+One-shot jobs (`--at`) auto-delete after they run. If you want to keep them around (to see run history), add `--keep-after-run`.
+
+## Three Types of Schedules
+
+### 1. One-Shot (`--at`)
+
+Fires once at a specific time, then auto-deletes.
+
+```bash
+# Relative time (from now)
+openclaw cron add --name "Call back" --at "2h" --session main \
+  --system-event "Call the client back about the proposal" --wake now
+
+# Absolute time (ISO 8601)
+openclaw cron add --name "Submit report" --at "2026-02-14T17:00:00" \
+  --session main --system-event "Submit the Q4 expense report" --wake now
+```
+
+<Note>
+If your ISO timestamp doesn't include a timezone, it's treated as UTC. Use your local time by adding the offset: `2026-02-14T17:00:00-08:00` for Pacific time. Or use `--tz` on recurring jobs.
+</Note>
+
+### 2. Recurring Interval (`--every`)
+
+Fires at a fixed interval, forever (until you remove or disable it).
+
+```bash
+# Every 4 hours
+openclaw cron add --name "Health check" --every "4h" \
+  --session isolated --message "Run a quick health check on the production servers." \
+  --announce
+```
+
+### 3. Cron Expression (`--cron`)
+
+The most flexible option. Uses standard 5-field cron syntax with timezone support.
+
+```bash
+# Every weekday at 7 AM Pacific
+openclaw cron add --name "Morning briefing" \
+  --cron "0 7 * * 1-5" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Generate today's briefing: weather, calendar, top emails, any deadlines." \
+  --announce
+```
+
+Here's the 5-field format:
+
+```
+┌───── minute (0-59)
+│ ┌───── hour (0-23)
+│ │ ┌───── day of month (1-31)
+│ │ │ ┌───── month (1-12)
+│ │ │ │ ┌───── day of week (0-7, Sun=0 or 7)
+│ │ │ │ │
+0 7 * * 1-5
+```
+
+Common patterns:
+
+| Expression | Meaning |
+|-----------|---------|
+| `0 7 * * *` | Every day at 7:00 AM |
+| `0 9 * * 1` | Every Monday at 9:00 AM |
+| `0 7 * * 1-5` | Weekdays at 7:00 AM |
+| `0 18 * * 5` | Every Friday at 6:00 PM |
+| `0 */4 * * *` | Every 4 hours on the hour |
+| `30 8 1 * *` | 1st of every month at 8:30 AM |
+
+<Tip>
+Always set `--tz` with cron expressions. Without it, the Gateway uses its host timezone, which might not be what you expect. Explicit is better.
+</Tip>
+
+## Main Session vs. Isolated Session
+
+This is the most important decision for each cron job. It affects context, cost, and delivery.
+
+### Main Session (`--session main`)
+
+The job injects a system event into your main conversation and wakes the heartbeat. Your AI processes it with full context: it knows what you've been talking about, what happened earlier today, and what's in its memory.
+
+**Use for:**
+- Reminders that need context ("remind me to follow up on the email we discussed")
+- Events that the heartbeat should handle alongside its normal checks
+- Anything where conversational context matters
+
+```bash
+openclaw cron add --name "Follow up" --at "3h" \
+  --session main \
+  --system-event "Follow up on the pricing discussion from earlier" \
+  --wake now
+```
+
+**Constraints:**
+- Must use `--system-event` (not `--message`)
+- Runs in the shared main session (adds to conversation history)
+- Wake mode controls timing: `--wake now` for immediate, `--wake next-heartbeat` to wait
+
+### Isolated Session (`--session isolated`)
+
+The job runs in a fresh, standalone session (`cron:<jobId>`). No prior conversation. No main session context. Clean slate every time.
+
+**Use for:**
+- Recurring reports (daily briefing, weekly summary)
+- Heavy analysis tasks
+- Anything that should be reproducible and independent
+- Tasks where you want a different model or thinking level
+
+```bash
+openclaw cron add --name "Weekly review" \
+  --cron "0 9 * * 1" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Generate a weekly project review: what shipped last week, what's blocked, what's planned for this week." \
+  --announce
+```
+
+**Key behaviors:**
+- Must use `--message` (not `--system-event`)
+- Fresh session each run (no carry-over between runs)
+- Defaults to "announce" delivery (results get sent to your channel)
+- Can use `--model` and `--thinking` overrides
+
+## Delivery: Where Results Go
+
+When an isolated cron job finishes, it can deliver its output to a channel. This is the "announce" behavior.
+
+### Default: Announce to Last Channel
+
+```bash
+openclaw cron add --name "Daily digest" \
+  --cron "0 18 * * *" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Summarize today: emails handled, meetings attended, tasks completed." \
+  --announce
+```
+
+With `--announce` and no channel specified, results go to whatever channel you last interacted with (iMessage, Telegram, etc.).
+
+### Specific Channel + Recipient
+
+```bash
+openclaw cron add --name "Morning brief" \
+  --cron "0 7 * * *" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Generate today's briefing." \
+  --announce \
+  --channel bluebubbles \
+  --to "+15555550123"
+```
+
+This always delivers to a specific iMessage contact, regardless of which channel you used last.
+
+### No Delivery (Internal Only)
+
+```bash
+openclaw cron add --name "Cache warmup" \
+  --every "6h" \
+  --session isolated \
+  --message "Refresh the project status cache. Write results to memory." \
+  --no-deliver
+```
+
+The job runs but results stay in the cron session. Useful for background housekeeping that writes to memory files or performs maintenance.
+
+## Model and Thinking Overrides
+
+Different jobs have different needs. A quick reminder doesn't need your most expensive model. A deep weekly analysis might need maximum thinking.
+
+```bash
+# Cheap model for routine tasks
+openclaw cron add --name "Inbox scan" \
+  --cron "0 */2 * * *" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Quick scan of inbox. Flag anything urgent." \
+  --model "anthropic/claude-sonnet-4-5" \
+  --announce
+
+# Full power for weekly analysis
+openclaw cron add --name "Deep analysis" \
+  --cron "0 6 * * 1" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Weekly codebase analysis: test coverage trends, open issues, deployment health." \
+  --model "opus" \
+  --thinking high \
+  --announce
+```
+
+<Note>
+Model overrides on isolated jobs are safe because each run starts a fresh session. Avoid model overrides on main session jobs because they change the shared session's model, which can cause unexpected behavior.
+</Note>
+
+## Multi-Agent Cron
+
+In a multi-agent setup (Module 8), you can pin cron jobs to specific agents:
+
+```bash
+# Pin to the work agent
+openclaw cron add --name "Slack digest" \
+  --cron "0 17 * * 1-5" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Summarize today's Slack activity: key threads, decisions made, action items." \
+  --agent work \
+  --announce --channel slack
+
+# Pin to the social agent
+openclaw cron add --name "Engagement report" \
+  --cron "0 10 * * *" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Report on yesterday's social media engagement: top posts, replies, follower changes." \
+  --agent social \
+  --announce --channel telegram
+```
+
+If the specified agent doesn't exist, the job falls back to the default agent.
+
+## Managing Cron Jobs
+
+### List all jobs
+
+```bash
+openclaw cron list
+```
+
+### Run a job immediately (don't wait for schedule)
+
+```bash
+openclaw cron run <job-id>
+```
+
+### See run history
+
+```bash
+openclaw cron runs --id <job-id>
+```
+
+### Edit a job
+
+```bash
+openclaw cron edit <job-id> --message "Updated prompt text"
+openclaw cron edit <job-id> --model "opus" --thinking high
+openclaw cron edit <job-id> --announce --channel telegram --to "123456789"
+```
+
+### Disable/enable a job (without deleting it)
+
+```bash
+openclaw cron edit <job-id> --disable
+openclaw cron edit <job-id> --enable
+```
+
+### Delete a job
+
+```bash
+openclaw cron remove <job-id>
+```
+
+## Your AI Can Create Cron Jobs Too
+
+Here's something powerful: your AI has access to the cron tool. You can text your AI:
+
+> "Remind me to call the dentist tomorrow at 2 PM"
+
+And it will create a cron job for you. No CLI needed. It works through any channel: iMessage, Telegram, the dashboard.
+
+You can also say:
+
+> "Set up a daily morning briefing at 7 AM that covers my calendar and top emails, and send it to my iMessage"
+
+Your AI creates the cron job with the right schedule, message, and delivery target. You can manage these jobs later with the CLI or ask your AI to list, edit, or remove them.
+
+## Practical Recipes
+
+Here are cron setups for common use cases. Copy and adapt these.
+
+### Morning Briefing
+
+```bash
+openclaw cron add --name "Morning briefing" \
+  --cron "0 7 * * 1-5" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Good morning briefing: 1) Today's weather. 2) Calendar overview for today. 3) Top 5 unread emails with one-line summaries. 4) Any tasks due today." \
+  --announce --channel bluebubbles
+```
+
+### Weekly Project Summary (Monday Morning)
+
+```bash
+openclaw cron add --name "Weekly summary" \
+  --cron "0 9 * * 1" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Weekly project summary: What shipped last week? What's blocked? What are this week's priorities? Keep it to bullet points." \
+  --model "opus" \
+  --announce
+```
+
+### End-of-Day Wrap-Up
+
+```bash
+openclaw cron add --name "EOD wrap-up" \
+  --cron "0 18 * * 1-5" --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "End of day summary: emails sent/received today, meetings attended, tasks completed, anything still pending for tomorrow." \
+  --announce
+```
+
+### Quick System Event (No Job)
+
+For one-off system events without creating a job:
+
+```bash
+openclaw system event --text "Check if the deploy finished" --mode now
+```
+
+This injects an event into the main session and triggers an immediate heartbeat. No cron job created, no cleanup needed.
+
+## Combining Heartbeat + Cron (The Full Picture)
+
+The most effective automation setup uses both systems together:
+
+**Heartbeat** (every 30 min): ambient awareness
+
+```markdown
+# HEARTBEAT.md
+- Check email for urgent messages
+- Review calendar for events in the next 2 hours
+- If a cron job left results, acknowledge them
+- If nothing needs attention, reply HEARTBEAT_OK
+```
+
+**Cron** (precise timing): scheduled deliverables
+
+| Job | Schedule | Type | Model |
+|-----|----------|------|-------|
+| Morning briefing | 7 AM weekdays | Isolated | Sonnet |
+| Weekly review | Monday 9 AM | Isolated | Opus |
+| EOD summary | 6 PM weekdays | Isolated | Sonnet |
+| Inbox deep scan | Every 4 hours | Isolated | Sonnet |
+
+The heartbeat catches things that pop up between cron runs. Cron handles the predictable schedule. Together, nothing falls through the cracks.
+
+## Cost Considerations
+
+Cron jobs cost money. Each isolated job is a full model call.
+
+| Setup | Daily Runs | Estimate |
+|-------|-----------|----------|
+| 1 daily briefing (Sonnet) | 1 | ~$0.10-0.30 |
+| 3 daily jobs (Sonnet) | 3 | ~$0.30-0.90 |
+| Hourly scan (Sonnet) | 14 (with active hours) | ~$1.40-4.20 |
+| Weekly deep analysis (Opus) | 0.14/day | ~$0.50-1.50/week |
+
+These estimates depend heavily on prompt length and response length. Short prompts with short responses are cheap. Long analytical prompts with detailed responses cost more.
+
+**Tips to manage costs:**
+- Use Sonnet for routine jobs, Opus only for complex analysis
+- Don't create hourly cron jobs when a heartbeat check would suffice
+- Use `--no-deliver` for jobs that just write to memory (smaller responses)
+- Review your jobs periodically: `openclaw cron list`
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Job not running at the expected time">
+    Check the timezone. Without `--tz`, cron uses the host's local timezone.
+
+    ```bash
+    openclaw cron list
+    ```
+
+    Look at the schedule and next run time. If the timezone is wrong, edit it:
+
+    ```bash
+    openclaw cron edit <job-id> --tz "America/Los_Angeles"
+    ```
+
+    Also make sure the Gateway is running. Cron jobs only fire while the Gateway process is active.
+  </Accordion>
+
+  <Accordion title="Job runs but nothing gets delivered">
+    For isolated jobs, delivery defaults to "announce." But if you used `--no-deliver` or the job was created with `delivery.mode: "none"`, results stay internal.
+
+    Fix:
+
+    ```bash
+    openclaw cron edit <job-id> --announce --channel bluebubbles
+    ```
+
+    Also check that the target channel is active: `openclaw channels status`
+  </Accordion>
+
+  <Accordion title="One-shot job disappeared">
+    One-shot jobs (`--at`) auto-delete after they run successfully. That's by design. If you want to keep them for history:
+
+    ```bash
+    openclaw cron add --at "1h" --session main \
+      --system-event "Check the deploy" --wake now --keep-after-run
+    ```
+  </Accordion>
+
+  <Accordion title="Too many cron jobs, hard to manage">
+    List everything:
+
+    ```bash
+    openclaw cron list
+    ```
+
+    Disable jobs you're not sure about (safer than deleting):
+
+    ```bash
+    openclaw cron edit <job-id> --disable
+    ```
+
+    Consider consolidating: if you have 5 separate cron jobs checking different things, a single heartbeat check might be simpler and cheaper.
+  </Accordion>
+</AccordionGroup>
+
+## What You Just Built
+
+You now have a full scheduling system. One-shot reminders, recurring reports, daily briefings, weekly summaries, all running automatically, all delivering to the channels you care about.
+
+Combined with heartbeats from Module 6, your AI has two complementary systems:
+
+- **Heartbeats**: "Is anything happening that I should know about?" (ambient awareness)
+- **Cron**: "Do this specific thing at this specific time." (precise scheduling)
+
+Your AI doesn't just respond when you ask. It reminds you about things, generates reports on schedule, and handles routine work without being told. That's real automation.
+
+Two modules left. Next: building a custom UI so you can see everything your agents are doing in one place.
+
+<Card
+  title="Next: Build Your Own UI"
+  icon="arrow-right"
+  href="/tutorial/custom-ui"
+  horizontal
+>
+  Connect to the Gateway WebSocket API and build a dashboard for your agents.
+</Card>

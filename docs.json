@@ -29,7 +29,8 @@
               "tutorial/soul",
               "tutorial/heartbeats",
               "tutorial/sub-agent",
-              "tutorial/multi-agent"
+              "tutorial/multi-agent",
+              "tutorial/cron"
             ]
           }
         ]
