@@ -26,7 +26,8 @@
           {
             "group": "Going Deeper",
             "pages": [
-              "tutorial/soul"
+              "tutorial/soul",
+              "tutorial/heartbeats"
             ]
           }
         ]

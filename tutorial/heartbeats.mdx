@@ -1,0 +1,409 @@
+---
+title: "Heartbeats & Autonomy"
+description: "Give your AI a consciousness loop so it wakes up, checks what needs attention, and acts on its own."
+icon: "heart-pulse"
+---
+
+## From Reactive to Proactive
+
+Up to this point, your AI only does things when you ask. You text it, it responds. You don't text it, it sits there doing nothing. That's a chatbot.
+
+What if your AI could wake up on its own every 30 minutes, scan your inbox, check your calendar, notice you have a meeting in an hour, and text you: "Heads up, you've got the design review in 55 minutes. Want me to pull up the mockups from yesterday?"
+
+That's a heartbeat. And it's the feature that turns an AI assistant into something that feels genuinely autonomous.
+
+## What Is a Heartbeat?
+
+A heartbeat is a periodic wake-up call. Every N minutes (default: 30), OpenClaw sends your AI a message that says, roughly: "Check if anything needs attention." Your AI reads its `HEARTBEAT.md` checklist, looks around, and either:
+
+- **Reports something**: texts you an alert, reminder, or update
+- **Does nothing**: replies `HEARTBEAT_OK` and goes back to sleep
+
+The key insight: your AI DECIDES what to do each beat. It's not running a fixed script. It reads the situation and uses judgment. If your inbox is quiet and your calendar is clear, it stays silent. If there's an urgent email and a meeting in 20 minutes, it tells you.
+
+This is fundamentally different from a cron job or a notification rule. Those are "if X then Y" automations. A heartbeat is "wake up, think, and act if needed." It's the difference between a motion sensor and a security guard.
+
+## Enabling Heartbeats
+
+Good news: heartbeats are probably already enabled. The default interval is 30 minutes. Check your current setup:
+
+```bash
+openclaw status
+```
+
+Look for the heartbeat section. If it shows an interval, you're already running heartbeats.
+
+To configure the interval explicitly:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "heartbeat": {
+        "every": "30m",
+        "target": "last"
+      }
+    }
+  }
+}
+```
+
+- `every`: how often the heartbeat fires. `"30m"` is 30 minutes. Use `"1h"` for hourly, `"15m"` for more frequent. Set `"0m"` to disable.
+- `target`: where alerts get delivered. `"last"` sends to whatever channel you last used (iMessage, dashboard, etc.). You can also specify a channel directly: `"bluebubbles"`, `"telegram"`, `"whatsapp"`.
+
+## Writing HEARTBEAT.md
+
+`HEARTBEAT.md` is your AI's to-do list for each wake-up. It lives in your workspace alongside SOUL.md and the other files.
+
+```bash
+nano ~/.openclaw/workspace/HEARTBEAT.md
+```
+
+Here's a practical starting point:
+
+```markdown
+# Heartbeat Checklist
+
+- Check email for anything urgent or time-sensitive
+- Review calendar for events in the next 2 hours
+- If a reminder or task is due, surface it
+- If nothing needs attention, reply HEARTBEAT_OK
+```
+
+That's it. Four lines. Your AI reads this every 30 minutes, does the checks, and either alerts you or stays quiet.
+
+<Warning>
+Keep HEARTBEAT.md short. Really short. This file gets loaded into context every 30 minutes. A 500-line heartbeat file burns tokens on every single beat. Think of it as a checklist, not an essay. Under 10 lines is ideal.
+</Warning>
+
+### Building Up Over Time
+
+Start simple and add checks as you discover what's useful:
+
+```markdown
+# Heartbeat Checklist
+
+- Check email for urgent messages
+- Review calendar for events in the next 2 hours
+- Check if any GitHub PRs need my review
+- If it's Monday morning, draft a weekly status update
+- If I haven't heard from the user in 8+ hours during daytime, send a brief check-in
+- If nothing needs attention, reply HEARTBEAT_OK
+```
+
+Your AI has access to all its tools during heartbeats. It can read emails (if you've set up email tools), check calendars, search the web, read files, run commands. The heartbeat just tells it WHEN to check. Your AI's tools determine WHAT it can check.
+
+<Tip>
+You can ask your AI to update HEARTBEAT.md for you. Say "Add a daily check for unread Slack messages to your heartbeat" and it'll edit the file itself. Changes take effect on the next beat.
+</Tip>
+
+## The Response Contract
+
+Your AI follows a simple rule during heartbeats:
+
+- **Nothing to report?** Reply with `HEARTBEAT_OK`. This gets silently swallowed. You never see it. No notification, no buzz, no interruption.
+- **Something needs attention?** Reply with the actual message. This gets delivered to you via whatever channel you configured.
+
+This is what makes heartbeats practical. Your AI wakes up 48 times a day (at 30-minute intervals), but you might only hear from it 2-3 times when something actually matters. The rest is silent.
+
+## Quiet Hours
+
+Your AI shouldn't text you at 3 AM about a non-urgent email. Set active hours to restrict when heartbeats run:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "heartbeat": {
+        "every": "30m",
+        "target": "last",
+        "activeHours": {
+          "start": "08:00",
+          "end": "22:00"
+        }
+      }
+    }
+  }
+}
+```
+
+Outside the 8 AM to 10 PM window, heartbeats simply don't fire. No checks, no token spend, no chance of a 4 AM notification about your calendar.
+
+The timezone is automatically determined from your user timezone setting. You can also set it explicitly:
+
+```json
+{
+  "activeHours": {
+    "start": "09:00",
+    "end": "22:00",
+    "timezone": "America/New_York"
+  }
+}
+```
+
+## Heartbeat vs. Cron: Two Types of Automation
+
+OpenClaw has two scheduling systems. Understanding when to use each is important.
+
+**Heartbeat = consciousness loop.** Your AI wakes up periodically and decides what to do. Think of it as awareness. The timing is approximate (every ~30 minutes) and the behavior is flexible (the AI decides).
+
+**Cron = calendar appointment.** A specific task runs at a specific time. Think of it as a schedule. The timing is exact (7:00 AM sharp) and the task is defined (generate a morning briefing).
+
+| Feature | Heartbeat | Cron |
+|---------|-----------|------|
+| Timing | Approximate (every N minutes) | Exact (cron expression or specific time) |
+| Session | Main session (has full context) | Can be isolated (fresh context) |
+| Decision | AI decides what to do | Task is predefined |
+| Cost | One turn per beat (batches multiple checks) | One turn per job |
+| Best for | Monitoring, awareness, check-ins | Reports, reminders, scheduled tasks |
+
+### When to Use Heartbeat
+
+- Monitoring inbox, calendar, notifications (batch them into one check)
+- Periodic awareness ("anything need attention?")
+- Context-dependent decisions (the AI knows what you've been working on)
+- Lightweight check-ins during quiet periods
+
+### When to Use Cron
+
+- Daily morning briefing at exactly 7 AM
+- Weekly project summary every Monday at 9 AM
+- One-shot reminder in 20 minutes
+- Tasks that need a different model or thinking level
+- Heavy analysis that shouldn't clutter your main session
+
+### Using Both Together
+
+The most effective setup combines heartbeat for awareness and cron for schedules:
+
+**HEARTBEAT.md** handles the rolling awareness:
+
+```markdown
+# Heartbeat Checklist
+
+- Check email for urgent messages
+- Review calendar for events in the next 2 hours
+- If a cron task left results, summarize them
+```
+
+**Cron jobs** handle the precise schedules:
+
+```bash
+# Daily morning briefing at 7 AM
+openclaw cron add \
+  --name "Morning briefing" \
+  --cron "0 7 * * *" \
+  --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Generate today's briefing: weather, calendar overview, top emails, any urgent tasks." \
+  --announce
+
+# One-shot reminder
+openclaw cron add \
+  --name "Call dentist" \
+  --at "2h" \
+  --session main \
+  --system-event "Reminder: call the dentist to reschedule" \
+  --wake now
+```
+
+## Creating Cron Jobs
+
+The `openclaw cron` CLI manages scheduled jobs. Here are the essentials:
+
+### One-shot reminder (fires once, then deletes itself)
+
+```bash
+openclaw cron add \
+  --name "Meeting prep" \
+  --at "45m" \
+  --session main \
+  --system-event "Your meeting with the design team starts in 15 minutes. Have you reviewed the mockups?" \
+  --wake now \
+  --delete-after-run
+```
+
+### Recurring job (cron expression)
+
+```bash
+openclaw cron add \
+  --name "Weekly review" \
+  --cron "0 9 * * 1" \
+  --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Generate a weekly project review: what shipped, what's blocked, what's next." \
+  --announce
+```
+
+The `--cron` flag uses standard 5-field cron expressions:
+
+```
+┌───────────── minute (0-59)
+│ ┌───────────── hour (0-23)
+│ │ ┌───────────── day of month (1-31)
+│ │ │ ┌───────────── month (1-12)
+│ │ │ │ ┌───────────── day of week (0-7, Sun=0 or 7)
+│ │ │ │ │
+0 7 * * *    ← every day at 7:00 AM
+0 9 * * 1    ← every Monday at 9:00 AM
+*/15 * * * * ← every 15 minutes
+0 18 * * 1-5 ← weekdays at 6:00 PM
+```
+
+### Managing jobs
+
+```bash
+openclaw cron list              # see all jobs
+openclaw cron run <job-id>      # trigger a job immediately
+openclaw cron runs --id <id>    # see run history
+openclaw cron remove <job-id>   # delete a job
+```
+
+<Accordion title="Main session vs. isolated session cron">
+  **Main session** (`--session main`): The job injects a system event into your main session. Your AI processes it during the next heartbeat with full conversational context. Use this for reminders and context-dependent tasks.
+
+  **Isolated session** (`--session isolated`): The job runs in a fresh, standalone session. No prior context. Use this for independent tasks like generating reports. Isolated jobs default to "announce" mode, which posts a summary to your configured channel.
+
+  The key difference: main session jobs have context (they know what you've been working on). Isolated jobs start clean (good for reproducible tasks).
+</Accordion>
+
+## Delivery: Where Heartbeats and Cron Results Go
+
+When your AI has something to report from a heartbeat (or a cron job has results to announce), it needs somewhere to deliver the message.
+
+**Heartbeat delivery** (`target` setting):
+- `"last"` (default): sends to whatever channel you last used. If you were chatting via iMessage, the alert goes to iMessage. If you were in the dashboard, it goes there.
+- `"bluebubbles"` / `"telegram"` / `"whatsapp"` / etc.: always sends to a specific channel.
+- `"none"`: the heartbeat runs but doesn't deliver anything. Useful for internal housekeeping.
+
+**Cron delivery** for isolated jobs:
+- By default, isolated jobs "announce" their results to the last channel (or a specified one).
+- Set `--channel` and `--to` to target a specific destination.
+
+```bash
+openclaw cron add \
+  --name "Morning brief" \
+  --cron "0 7 * * *" \
+  --session isolated \
+  --message "..." \
+  --announce \
+  --channel bluebubbles \
+  --to "+15555550123"
+```
+
+## Token Costs: Being Smart About It
+
+Heartbeats cost real money. Every beat is a full AI model call with your system prompt, workspace files, and HEARTBEAT.md loaded into context. At 30-minute intervals over a 14-hour active day, that's 28 heartbeats.
+
+Here's how to keep costs manageable:
+
+1. **Keep HEARTBEAT.md tiny.** Under 10 lines. Every line gets loaded 28+ times per day.
+2. **Use active hours.** Don't burn tokens from midnight to 8 AM when nothing is happening.
+3. **Start with longer intervals.** Try `"1h"` first, move to `"30m"` once you know you need it.
+4. **Use a cheaper model for heartbeats.** You can set a different model just for heartbeats:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "heartbeat": {
+        "every": "30m",
+        "model": "anthropic/claude-sonnet-4-5"
+      }
+    }
+  }
+}
+```
+
+This runs heartbeats on Sonnet (cheaper, faster) while keeping Opus for your actual conversations.
+
+## A Day in the Life
+
+Here's what a well-configured heartbeat setup looks like in practice:
+
+**8:00 AM** - First heartbeat of the day. Your AI checks email, sees 3 new messages overnight, and texts you: "Morning! 3 emails overnight. Two from marketing (not urgent) and one from the client about the API deadline. Want me to summarize it?"
+
+**8:30 AM** - Heartbeat fires. Nothing new. `HEARTBEAT_OK`. You hear nothing.
+
+**9:00 AM** - Heartbeat fires. Calendar shows a meeting at 9:30. Texts you: "Design review in 30 minutes. The latest mockups were shared yesterday, want me to pull them up?"
+
+**9:30 - 11:30 AM** - Four heartbeats fire. Nothing urgent. Silent.
+
+**12:00 PM** - Heartbeat fires. Notices you haven't replied to the client email from this morning. Texts: "Quick reminder: the client email about the API deadline is still unanswered. Want to handle it now or should I draft a response?"
+
+**12:30 - 5:30 PM** - Heartbeats fire periodically. Mostly silent. One alert about a GitHub PR that needs review.
+
+**6:00 PM** - Cron job fires. Your daily summary arrives: "Today: 12 emails handled, 2 meetings attended, 1 PR merged. Tomorrow: 3 meetings including the all-hands at 10."
+
+**10:00 PM** - Active hours end. No more heartbeats until 8 AM tomorrow.
+
+You got 4-5 useful notifications across a full day. The AI woke up 28 times but only spoke when it had something worth saying. That's the power of heartbeats.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Heartbeat isn't firing">
+    Check the status:
+
+    ```bash
+    openclaw status
+    ```
+
+    Look for heartbeat interval and last fire time. If the interval shows `0m`, heartbeats are disabled. Set `agents.defaults.heartbeat.every` to a non-zero value.
+
+    Also check if active hours are blocking it. If your current time is outside the `activeHours` window, heartbeats won't fire until the window opens.
+  </Accordion>
+
+  <Accordion title="Getting too many notifications">
+    Your HEARTBEAT.md might be too aggressive. Remove checks that generate frequent noise. Also consider:
+
+    - Widening the interval (`"30m"` to `"1h"`)
+    - Adding qualifiers: "Check email for **urgent** messages" instead of "Check email"
+    - Using `target: "none"` while tuning (heartbeat runs but doesn't notify)
+  </Accordion>
+
+  <Accordion title="Heartbeat costs are too high">
+    Three levers:
+
+    1. Increase the interval (`"1h"` or longer)
+    2. Use a cheaper model for heartbeats (`"model": "anthropic/claude-sonnet-4-5"`)
+    3. Set active hours to reduce total daily beats
+
+    You can also simplify HEARTBEAT.md. Every line of context gets processed every beat.
+  </Accordion>
+
+  <Accordion title="Cron job not delivering results">
+    For isolated cron jobs, make sure you have `--announce` set. Without it, the results stay in the isolated session and aren't delivered anywhere.
+
+    Check the job status:
+
+    ```bash
+    openclaw cron list
+    openclaw cron runs --id <job-id>
+    ```
+
+    If the job ran but delivery failed, check that the target channel is configured and active.
+  </Accordion>
+</AccordionGroup>
+
+## What You Just Built
+
+Your AI is now genuinely autonomous. It doesn't wait for you to ask. It wakes up, looks around, and tells you what matters. It monitors your inbox, watches your calendar, and surfaces things before you realize you need them.
+
+Combined with cron jobs for scheduled tasks, you have a complete automation layer:
+
+- **Heartbeats** for awareness (what needs attention right now?)
+- **Cron** for schedules (what needs to happen at a specific time?)
+- **HEARTBEAT.md** for control (what should the AI check?)
+- **Active hours** for sanity (when should all of this run?)
+
+And here's the thing: you're still running ONE agent. One AI that handles everything. As your needs grow, you'll want to split responsibilities. A personal agent for your inbox. A work agent for Slack. A social media agent for X. That's what sub-agents are for.
+
+<Card
+  title="Next: Your First Sub-Agent"
+  icon="arrow-right"
+  href="/tutorial/sub-agents"
+  horizontal
+>
+  Create a second AI agent with its own personality, tools, and purpose.
+</Card>
