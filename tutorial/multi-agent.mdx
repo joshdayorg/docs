@@ -360,24 +360,44 @@ With `mode: "all"`, the work agent runs in a sandboxed environment where file ac
 
 Agents are isolated by default. They can't see each other's conversations or memory. But sometimes they need to talk.
 
-Your personal agent might need to ask the work agent about a Slack thread. Your work agent might need to alert the personal agent about something urgent. This is done through `sessions_send`:
+Your personal agent might need to ask the work agent about a Slack thread. Your work agent might need to alert the personal agent about something urgent. This is done through `sessions_send`. Enable it per-agent in `agents.list`:
 
 ```json
 {
-  "subagents": {
-    "allowAgents": ["main", "work", "social"]
+  "agents": {
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "subagents": {
+          "allowAgents": ["main", "work", "social"]
+        }
+      },
+      {
+        "id": "work",
+        "subagents": {
+          "allowAgents": ["main", "work"]
+        }
+      },
+      {
+        "id": "social",
+        "subagents": {
+          "allowAgents": ["main", "social"]
+        }
+      }
+    ]
   }
 }
 ```
 
-With this config, any listed agent can send messages to any other listed agent. Your personal agent can say:
+With this config, each agent specifies which other agents it can interact with. Your personal agent can say:
 
 > "Ask the work agent: what was the outcome of the customer call thread in #support today?"
 
 And behind the scenes, OpenClaw routes that message to the work agent's session, gets the response, and brings it back.
 
 <Note>
-Agent-to-agent communication is opt-in. Without `subagents.allowAgents`, agents can't see or talk to each other. This is a feature, not a bug. Isolation is the default because it's safer.
+Agent-to-agent communication is opt-in. Without `subagents.allowAgents` set per-agent in `agents.list[]`, agents can't see or talk to each other. This is a feature, not a bug. Isolation is the default because it's safer.
 </Note>
 
 ## Multiple Channel Accounts
@@ -461,10 +481,7 @@ Here's a realistic multi-agent config for someone running a small SaaS:
   "bindings": [
     { "agentId": "work", "match": { "channel": "slack" } },
     { "agentId": "social", "match": { "channel": "telegram" } }
-  ],
-  "subagents": {
-    "allowAgents": ["main", "work", "social"]
-  }
+  ]
 }
 ```
 
@@ -495,7 +512,7 @@ Useful commands for day-to-day management:
 openclaw agents list              # see all agents
 openclaw agents list --bindings   # see agents + their routing rules
 openclaw status                   # overview of all running agents
-openclaw status --deep            # detailed health check
+openclaw status --deep            # probe channel connections (WhatsApp, Telegram, Discord, Slack, Signal)
 openclaw doctor                   # diagnose config issues
 ```
 

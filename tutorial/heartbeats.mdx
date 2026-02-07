@@ -130,17 +130,21 @@ Change `"30m"` to whatever interval you want:
 - `"2h"` for light monitoring
 - `"0m"` to disable heartbeats completely
 
-After changing the config, reload OpenClaw:
+After changing the config, restart the gateway:
+
+```bash
+openclaw gateway restart
+```
+
+<Accordion title="Alternative: hot reload without restart">
+You can also send a reload signal without a full restart:
 
 ```bash
 kill -USR1 $(pgrep -f "openclaw gateway")
 ```
 
-Or just restart the gateway:
-
-```bash
-openclaw gateway restart
-```
+This reloads the config without dropping active sessions. However, `openclaw gateway restart` is the safer and recommended approach — the `pgrep` command could match the wrong process if other OpenClaw commands are running.
+</Accordion>
 
 <Tip>
 Start with 30 minutes. That's frequent enough to catch most things without running up your API bill. If you find your AI is surfacing stale information (stuff that was already relevant 2 hours ago), drop it to 15 minutes. If you're paying too much and don't need fast responses, go to 1 hour.

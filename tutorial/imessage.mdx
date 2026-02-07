@@ -276,17 +276,25 @@ To enable groups:
 }
 ```
 
-With `requireMention: true`, your AI only responds in groups when someone mentions it by name. This prevents it from jumping into every conversation. Set mention patterns in your agent config:
+With `requireMention: true`, your AI only responds in groups when someone mentions it by name. This prevents it from jumping into every conversation. Set mention patterns in your agent config under the agent's entry in `agents.list`:
 
 ```json
 {
-  "messages": {
-    "groupChat": {
-      "mentionPatterns": ["@ai", "@assistant", "hey ai"]
-    }
+  "agents": {
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "groupChat": {
+          "mentionPatterns": ["@ai", "@assistant", "hey ai"]
+        }
+      }
+    ]
   }
 }
 ```
+
+You can also set a global fallback under `messages.groupChat.mentionPatterns`, but the per-agent path is the correct primary location.
 
 ## Advanced Features
 
@@ -325,6 +333,10 @@ If you want the simpler option:
 brew install steipete/tap/imsg
 ```
 
+<Note>
+The `imsg` tap above may change over time. Check the [OpenClaw docs](https://docs.openclaw.ai) for the latest install instructions if the tap isn't found.
+</Note>
+
 Then configure:
 
 ```json
@@ -333,7 +345,7 @@ Then configure:
     "imessage": {
       "enabled": true,
       "cliPath": "/usr/local/bin/imsg",
-      "dbPath": "/Users/yourname/Library/Messages/chat.db"
+      "dbPath": "~/Library/Messages/chat.db"
     }
   }
 }

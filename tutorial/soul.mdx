@@ -182,9 +182,10 @@ nano ~/.openclaw/workspace/IDENTITY.md
 
 - Name: Nova
 - Emoji: ✨
-- Creature: AI assistant with a knack for finding shortcuts
-- Vibe: Efficient, slightly nerdy, always ready
+- Theme: AI assistant with a knack for finding shortcuts
 ```
+
+IDENTITY.md is free-form Markdown — your AI reads it as text, so you can structure it however you like. The config schema uses `name`, `theme`, `emoji`, and `avatar` as the standard fields, but in the Markdown file you can add any detail that helps define your AI's character.
 
 The name matters more than you'd think. Once your AI has a name, it stops feeling like "the AI" and starts feeling like a specific entity. You text "Nova" instead of "my assistant." It's a small thing that makes a big difference in how you relate to it.
 
@@ -254,7 +255,7 @@ Your AI doesn't just read memory files top to bottom. OpenClaw includes a semant
 
 Ask your AI "What did I say about the deploy script?" and it will search across all memory files for anything related, even if the original note said "NODE_ENV issue with deployments." The search uses embeddings (vector representations of text) to find meaning, not just keywords.
 
-This works out of the box with no configuration. OpenClaw indexes your memory files automatically and keeps the index updated as files change.
+This works automatically when an embedding provider is available. OpenClaw auto-selects from your configured providers (OpenAI, Gemini, or local). If you only have Anthropic configured, you may need to set up local embeddings (see below) or add an OpenAI/Gemini key. OpenClaw indexes your memory files automatically and keeps the index updated as files change.
 
 <Accordion title="Configuring memory search (optional)">
   By default, memory search uses your AI provider's embedding API (OpenAI or Gemini). If you want to use local embeddings (no API calls):

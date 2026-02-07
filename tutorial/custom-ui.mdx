@@ -20,7 +20,7 @@ This module covers everything you need:
 
 ## The Control UI (Built-In Dashboard)
 
-You already have a full dashboard. When you ran `openclaw init`, the Gateway started serving a browser-based Control UI on port 18789.
+You already have a full dashboard. When you ran `openclaw onboard --install-daemon` back in Module 2, the Gateway started serving a browser-based Control UI on port 18789.
 
 Open it locally:
 
@@ -306,6 +306,10 @@ OpenClaw also supports the newer Responses API format:
 }
 ```
 
+<Note>
+The Responses API config structure mirrors the Chat Completions endpoint. Check the [OpenClaw docs](https://docs.openclaw.ai) for the latest endpoint configuration options if the structure has changed.
+</Note>
+
 ```bash
 curl http://127.0.0.1:18789/v1/responses \
   -H "Authorization: Bearer YOUR_GATEWAY_TOKEN" \
@@ -332,7 +336,7 @@ curl http://127.0.0.1:18789/tools/invoke \
   }'
 ```
 
-This endpoint is always enabled (no config change needed). It respects the same tool policies as agent runs, so your security rules still apply.
+This endpoint is enabled by default (check your config if it's not working). It respects the same tool policies as agent runs, so your security rules still apply.
 
 Use cases:
 

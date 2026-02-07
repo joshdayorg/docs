@@ -113,7 +113,7 @@ Keep your response under 500 words unless the task requires more detail.
 You can delete `BOOTSTRAP.md` since this agent doesn't need a first-run ritual. It's a worker, not a companion.
 
 <Tip>
-Sub-agent workspace files are loaded differently from your main agent. Sub-agents only receive `AGENTS.md` and `TOOLS.md` in their context. `SOUL.md`, `IDENTITY.md`, `USER.md`, and `HEARTBEAT.md` are not injected. So put your most important instructions in `AGENTS.md`.
+Sub-agent workspace files are loaded differently from your main agent. Sub-agents spawned via `sessions_spawn` run in isolated sessions and typically only receive `AGENTS.md` and `TOOLS.md` in their context. Files like `SOUL.md`, `IDENTITY.md`, `USER.md`, and `HEARTBEAT.md` are generally not injected into sub-agent sessions. Put your most important instructions in `AGENTS.md` to be safe.
 </Tip>
 
 ## Configuring the Agent
@@ -230,7 +230,7 @@ So you could write:
 ```json5
 {
   tools: {
-    deny: ["group:automation", "group:messaging", "group:ui", "group:nodes"]
+    deny: ["group:automation", "group:messaging", "group:ui", "nodes"]
   }
 }
 ```
@@ -295,6 +295,10 @@ Or stop all running sub-agents:
 ```
 /subagents stop all
 ```
+
+<Note>
+These `/subagents` commands are chat-level commands you type in the conversation UI, not CLI commands. They're available in the Control UI and other chat interfaces.
+</Note>
 
 ## Setting a Timeout
 

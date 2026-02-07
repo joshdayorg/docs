@@ -239,7 +239,7 @@ Here are the commands you'll use most often:
 | `openclaw logs` | View Gateway logs |
 | `openclaw status` | Full status overview |
 | `openclaw configure` | Re-run configuration wizard |
-| `openclaw models status` | Check your current model and auth |
+| `openclaw models status` | Check your configured model and provider status |
 
 <Tip>
 Run `openclaw help` anytime to see all available commands.
@@ -268,10 +268,10 @@ Run `openclaw help` anytime to see all available commands.
     openclaw models status
     ```
 
-    If auth shows as missing or expired, re-run the config wizard:
+    If the model or provider shows as misconfigured, re-run the config wizard:
 
     ```bash
-    openclaw configure --section auth
+    openclaw configure --section model
     ```
   </Accordion>
 
@@ -281,6 +281,8 @@ Run `openclaw help` anytime to see all available commands.
     ```bash
     openclaw config get gateway.auth.token
     ```
+
+    If you set your token via the `OPENCLAW_GATEWAY_TOKEN` environment variable instead of the config file, this command may return nothing. Check your shell profile (`~/.zshrc` or `~/.bashrc`) for the variable instead.
 
     Paste that into the auth field in the Control UI settings.
   </Accordion>
