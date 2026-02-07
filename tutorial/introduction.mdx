@@ -1,0 +1,215 @@
+---
+title: "What is OpenClaw?"
+description: "OpenClaw is a self-hosted AI gateway that turns chat apps into an always-available personal AI partner. Here's what that actually means."
+icon: "claw"
+---
+
+## Not Another Chatbot
+
+You already have ChatGPT. You already have Claude. So why would you want to run your own AI?
+
+Because there's a massive gap between "I can ask an AI questions" and "I have an AI that knows me, runs on my machine, and can actually do things on my behalf."
+
+OpenClaw fills that gap.
+
+**OpenClaw is a self-hosted gateway** that connects the chat apps you already use (WhatsApp, iMessage, Telegram, Discord, Slack) to an AI agent running on your own computer. You text it like a friend. It texts back. But unlike a chatbot, it can:
+
+- Read and send emails on your behalf
+- Check your calendar and remind you about upcoming events
+- Search the web, read files, run code
+- Control your browser, take screenshots, manage devices
+- Wake up on its own and do things without being asked
+- Remember everything about you, your preferences, your projects
+
+This isn't hypothetical. People are running OpenClaw setups right now that manage their companies, draft customer responses, monitor Slack channels, post on social media, and handle their personal inboxes. All from a single text message.
+
+## How It Actually Works
+
+The architecture is simple:
+
+```
+Your phone (WhatsApp/iMessage/Telegram)
+        ↓
+   OpenClaw Gateway (runs on your Mac/Linux/server)
+        ↓
+   AI Model (Claude, GPT, etc. via API)
+        ↓
+   Tools (email, calendar, browser, code, files...)
+```
+
+The **Gateway** is the brain of the operation. It's a process running on your machine that:
+
+1. Listens for messages from your chat apps
+2. Sends them to an AI model (you choose which one)
+3. Gives the AI access to tools (files, browser, shell, etc.)
+4. Routes the AI's response back to your chat app
+
+You install it with one command, connect your chat apps, and you're talking to your AI from your pocket within minutes.
+
+<Info>
+OpenClaw is open source (MIT licensed) and runs entirely on your hardware. Your conversations, files, and data never touch someone else's server (except the AI model API calls, which you control).
+</Info>
+
+## The Philosophy: Files, Not Settings Panels
+
+Most AI tools give you a settings page with dropdowns and toggles. OpenClaw takes a radically different approach: **everything is a file.**
+
+Your AI's personality? It's a file called `SOUL.md`:
+
+```markdown SOUL.md
+# Who I Am
+
+I'm Alex, a direct and resourceful AI assistant. I don't sugarcoat things
+but I'm never rude. I prefer to figure things out myself before asking.
+
+## Boundaries
+- Never send emails without asking first
+- Be concise in text messages, thorough in longer conversations
+- Don't check social media unless asked
+```
+
+Your AI's knowledge about you? That's `USER.md`:
+
+```markdown USER.md
+# About Josh
+
+- Timezone: America/Los_Angeles
+- Prefers short messages over walls of text
+- Working on a SaaS product (TryClaw)
+- Morning person, don't bother after 10 PM
+- Loves bad puns
+```
+
+Your AI's operational rules? `AGENTS.md`. Its identity and avatar? `IDENTITY.md`. Its long-term memory? `MEMORY.md`.
+
+This file-based approach has real advantages:
+
+<CardGroup cols={2}>
+  <Card title="Version controlled" icon="code-branch">
+    Your AI's personality is in Git. You can track changes, roll back, branch, and merge.
+  </Card>
+  <Card title="Portable" icon="box">
+    Copy these files to a new machine and your AI picks up where it left off. No account migration needed.
+  </Card>
+  <Card title="Transparent" icon="eye">
+    You can read exactly what your AI knows and believes. No black-box settings hidden in a database.
+  </Card>
+  <Card title="Hackable" icon="screwdriver-wrench">
+    Want to change your AI's entire personality? Edit a text file. Want to give it new rules? Add a paragraph.
+  </Card>
+</CardGroup>
+
+## Memory That Persists
+
+Here's the thing about AI chatbots: they forget everything. Every conversation starts from zero. ChatGPT tries to fix this with "memory," but it's a black box you can't inspect or control.
+
+OpenClaw solves this with a two-layer memory system:
+
+**Daily logs** (`memory/2026-02-07.md`) capture what happened each day. Raw notes, decisions made, things learned. Think of these as a journal.
+
+**Long-term memory** (`MEMORY.md`) is the curated version. The AI periodically reviews its daily logs and distills the important stuff into this file. Lessons learned, user preferences, project context, relationship notes.
+
+When your AI wakes up for a new session, it reads these files and picks up right where it left off. It remembers that you have a dentist appointment next Tuesday. It knows your coworker Sarah prefers formal emails. It recalls that the deploy script broke last week and what fixed it.
+
+This is your AI's memory, stored as plain text files on your machine, fully readable and editable by you.
+
+## Autonomy: Your AI Does Things While You Sleep
+
+The most powerful feature in OpenClaw isn't the chat interface. It's **heartbeats**.
+
+A heartbeat is a periodic wake-up call. Every 30 minutes (or whatever interval you set), your AI wakes up, reads its `HEARTBEAT.md` checklist, and decides if anything needs attention:
+
+```markdown HEARTBEAT.md
+# Periodic Checks
+
+- Check email for anything urgent
+- Look at calendar for upcoming events in the next 2 hours
+- Check if any GitHub PRs need review
+- If it's Monday morning, draft a weekly status update
+```
+
+If nothing needs attention, it goes back to sleep. If something does? It acts. It might text you: "Hey, you have a meeting with the design team in 45 minutes and you haven't reviewed the mockups they sent yesterday."
+
+Combined with **cron jobs** for scheduled tasks (daily reports, weekly rollups, timed reminders), your AI becomes genuinely proactive. Not "proactive" in the way Siri suggests you call someone. Actually proactive, the way a great executive assistant would be.
+
+## Multi-Agent: One Gateway, Many Brains
+
+As you get comfortable, you'll discover that one AI agent isn't enough. You might want:
+
+- A **personal agent** that handles your inbox and calendar
+- A **work agent** that monitors Slack and drafts responses
+- A **social media agent** that manages your X/Twitter presence
+- A **coding agent** that reviews PRs and writes tests
+
+OpenClaw supports all of these running simultaneously on one Gateway. Each agent gets its own personality (`SOUL.md`), its own memory, its own tools, and its own chat channels. They can even talk to each other.
+
+<Note>
+Multi-agent setups are covered in Modules 7 and 8. For now, just know that the single-agent setup you'll build first scales naturally into this more powerful configuration.
+</Note>
+
+## Why Self-Hosted Matters
+
+"Can't I just use ChatGPT/Claude for all this?"
+
+You can use those for conversations. But you can't use them to:
+
+- **Run tools on your machine** (read your files, control your browser, run scripts)
+- **Connect to your personal chat apps** (WhatsApp, iMessage)
+- **Stay persistent** (always running, always available, always remembering)
+- **Act autonomously** (heartbeats, cron jobs, proactive notifications)
+- **Keep your data private** (conversations stay on your hardware)
+
+The self-hosted model means your AI has real capabilities. It's running on a computer with a file system, a browser, shell access, and network connectivity. It can do anything you could do sitting at that computer, but it's doing it 24/7.
+
+And because it's running on YOUR machine, there's no monthly subscription beyond the AI model API costs. No vendor lock-in. No terms-of-service changes that suddenly break your workflow. Switch models whenever you want, add tools whenever you need them, customize everything.
+
+## What You'll Build in This Tutorial
+
+By the end of this tutorial series, you'll have:
+
+<Steps>
+  <Step title="A running OpenClaw instance">
+    Installed and configured on your Mac or Linux machine, with your choice of AI model.
+  </Step>
+  <Step title="Remote access from anywhere">
+    Using Tailscale so you can reach your AI from your phone, laptop, or any device on your network.
+  </Step>
+  <Step title="Chat app integration">
+    Your AI connected to iMessage, WhatsApp, or Telegram so you can text it from your pocket.
+  </Step>
+  <Step title="A personalized AI with real memory">
+    SOUL.md, USER.md, MEMORY.md, and daily logs all configured and working.
+  </Step>
+  <Step title="Autonomous behavior">
+    Heartbeats checking your email, calendar, and notifications. Cron jobs running scheduled tasks.
+  </Step>
+  <Step title="Multiple specialized agents">
+    A multi-agent setup where different AI personalities handle different domains of your life.
+  </Step>
+</Steps>
+
+This isn't a weekend project you'll abandon. It's infrastructure that gets more valuable every day as your AI learns about you, your work, and your preferences.
+
+## Prerequisites
+
+Before we start the installation in the next module, here's what you'll need:
+
+- **A Mac or Linux computer** that can stay running (a Mac Mini is perfect for this, but any always-on machine works)
+- **Node.js 22 or newer** installed (`node --version` to check)
+- **An Anthropic API key** (we recommend Claude Opus 4.6 for maximum capability)
+- **20 minutes** for initial setup
+
+<Tip>
+You don't need a dedicated server. OpenClaw runs fine on the same Mac you use every day. The Gateway process is lightweight and stays out of your way.
+</Tip>
+
+## Ready?
+
+<Card
+  title="Next: Installation & Setup"
+  icon="arrow-right"
+  href="/tutorial/installation"
+  horizontal
+>
+  Install OpenClaw, configure your first agent, and have your first conversation.
+</Card>
