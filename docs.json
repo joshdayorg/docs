@@ -31,7 +31,8 @@
               "tutorial/sub-agent",
               "tutorial/multi-agent",
               "tutorial/cron",
-              "tutorial/custom-ui"
+              "tutorial/custom-ui",
+              "tutorial/advanced-patterns"
             ]
           }
         ]
