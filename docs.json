@@ -5,14 +5,15 @@
   "colors": {
     "primary": "#4AA8D8",
     "light": "#4AA8D8",
-    "dark": "#4AA8D8",
-    "background": {
+    "dark": "#4AA8D8"
+  },
+  "background": {
+    "color": {
       "dark": "#0A0E14",
       "light": "#FFFFFF"
     }
   },
   "favicon": "/favicon.svg",
-  "css": "/custom.css",
   "navigation": {
     "tabs": [
       {
