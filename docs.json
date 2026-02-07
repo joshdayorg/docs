@@ -28,7 +28,8 @@
             "pages": [
               "tutorial/soul",
               "tutorial/heartbeats",
-              "tutorial/sub-agent"
+              "tutorial/sub-agent",
+              "tutorial/multi-agent"
             ]
           }
         ]

@@ -1,0 +1,574 @@
+---
+title: "Multi-Agent Architecture"
+description: "Run multiple agents with separate personalities, channels, and responsibilities on one Gateway."
+icon: "users"
+---
+
+## Beyond the Solo Agent
+
+In Module 7, you created a sub-agent and spawned it for background tasks. That's useful, but it's still one-directional: your main agent delegates work, the sub-agent runs, results come back.
+
+Now we're going bigger. What if different agents owned different channels? Your personal agent handles iMessage, your work agent handles Slack, your social media agent handles X. Each has its own personality, its own memory, its own tools. They run independently and talk to each other when needed.
+
+This is the multi-agent architecture. One Gateway process, many brains. Each brain is isolated, focused, and purpose-built for its domain.
+
+## The Architecture
+
+Here's the mental model:
+
+```
+                    ┌─────────────────────────────┐
+                    │      OpenClaw Gateway        │
+                    │                              │
+  iMessage ────────▶│  ┌──────────┐               │
+                    │  │ Personal │  workspace-personal/
+                    │  │  Agent   │  SOUL.md, MEMORY.md...
+  Slack ──────────▶ │  └──────────┘               │
+                    │  ┌──────────┐               │
+                    │  │   Work   │  workspace-work/
+  WhatsApp ───────▶ │  │  Agent   │  SOUL.md, MEMORY.md...
+                    │  └──────────┘               │
+                    │  ┌──────────┐               │
+                    │  │  Social  │  workspace-social/
+  Telegram ───────▶ │  │  Agent   │  SOUL.md, MEMORY.md...
+                    │  └──────────┘               │
+                    └─────────────────────────────┘
+```
+
+Each agent has:
+- Its own **workspace** (separate SOUL.md, MEMORY.md, AGENTS.md)
+- Its own **session store** (conversations don't bleed between agents)
+- Its own **auth profiles** (API keys, if needed)
+- Its own **heartbeat** (optional, per-agent)
+- Its own **tool restrictions** (what each agent can and can't do)
+
+They all share one Gateway process. No need to run multiple servers.
+
+## Step 1: Plan Your Agents
+
+Before you start configuring, decide what each agent should do. Here's a practical setup for someone running a small business:
+
+| Agent | Role | Channel | Model |
+|-------|------|---------|-------|
+| `personal` | Personal assistant, calendar, inbox | iMessage | Opus 4.6 |
+| `work` | Slack monitoring, customer responses, project tracking | Slack | Opus 4.6 |
+| `social` | Social media engagement, content scheduling | Telegram | Sonnet 4.5 |
+
+Start with two agents. You can always add more later. The most common pattern is "personal" and "work" as the first split.
+
+## Step 2: Create Agent Workspaces
+
+Use the agent wizard for each new agent:
+
+```bash
+openclaw agents add work
+openclaw agents add social
+```
+
+The wizard creates the workspace and scaffolds the files for each agent. After running these, your file system looks like:
+
+```
+~/.openclaw/
+├── workspace/              ← your main/personal agent (already exists)
+│   ├── SOUL.md
+│   ├── AGENTS.md
+│   ├── MEMORY.md
+│   └── ...
+├── workspace-work/         ← new work agent
+│   ├── SOUL.md
+│   ├── AGENTS.md
+│   └── ...
+├── workspace-social/       ← new social agent
+│   ├── SOUL.md
+│   ├── AGENTS.md
+│   └── ...
+└── agents/
+    ├── main/               ← main agent state
+    ├── work/               ← work agent state
+    └── social/             ← social agent state
+```
+
+Now give each agent a personality. Edit each workspace's SOUL.md:
+
+**Work agent** (`~/.openclaw/workspace-work/SOUL.md`):
+
+```markdown
+# Work Agent
+
+I'm a professional, efficient assistant focused on work tasks.
+I monitor Slack, track projects, and draft customer responses.
+
+## Style
+- Professional but not stiff
+- Always include context when reporting on Slack threads
+- Draft customer responses for review, never send directly
+- Summarize long threads into bullet points
+
+## Boundaries
+- Never share personal info from the personal agent
+- Don't make commitments without approval
+- Keep customer data private
+```
+
+**Social agent** (`~/.openclaw/workspace-social/SOUL.md`):
+
+```markdown
+# Social Agent
+
+I manage social media presence. Casual, engaging, on-brand.
+
+## Style
+- Match the tone of the platform (Twitter is punchy, LinkedIn is professional)
+- Draft posts for approval, never auto-post unless told to
+- Track engagement patterns and surface interesting replies
+
+## Boundaries
+- No controversial topics without explicit approval
+- No automated DMs
+- Flag any negative mentions immediately
+```
+
+## Step 3: Configure Bindings
+
+Bindings tell the Gateway which agent handles which messages. This is the routing layer.
+
+Edit your config:
+
+```bash
+nano ~/.openclaw/openclaw.json
+```
+
+Here's a complete multi-agent config:
+
+```json
+{
+  "agents": {
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Personal",
+        "workspace": "~/.openclaw/workspace"
+      },
+      {
+        "id": "work",
+        "name": "Work",
+        "workspace": "~/.openclaw/workspace-work"
+      },
+      {
+        "id": "social",
+        "name": "Social",
+        "workspace": "~/.openclaw/workspace-social",
+        "model": "anthropic/claude-sonnet-4-5"
+      }
+    ]
+  },
+  "bindings": [
+    {
+      "agentId": "work",
+      "match": { "channel": "slack" }
+    },
+    {
+      "agentId": "social",
+      "match": { "channel": "telegram" }
+    }
+  ]
+}
+```
+
+What this does:
+
+- **All Slack messages** go to the `work` agent
+- **All Telegram messages** go to the `social` agent
+- **Everything else** (iMessage, dashboard, etc.) goes to `main` (the default)
+
+Restart the gateway to apply:
+
+```bash
+openclaw gateway restart
+```
+
+Verify your bindings:
+
+```bash
+openclaw agents list --bindings
+```
+
+## How Routing Works
+
+The Gateway picks one agent per message using a priority system:
+
+1. **Exact peer match**: a specific person or group is routed to a specific agent
+2. **Guild/team match**: a Discord server or Slack workspace goes to an agent
+3. **Account match**: a specific channel account (e.g., "work WhatsApp" vs "personal WhatsApp")
+4. **Channel match**: all messages on a channel go to an agent
+5. **Default agent**: anything that doesn't match a binding goes to the default
+
+The most specific rule wins. This means you can set broad channel-level rules and override them for specific conversations.
+
+### Routing Example: One Channel, Multiple Agents
+
+What if you want most WhatsApp messages to go to your personal agent, but one specific group chat to go to your work agent?
+
+```json
+{
+  "bindings": [
+    {
+      "agentId": "work",
+      "match": {
+        "channel": "whatsapp",
+        "peer": { "kind": "group", "id": "120363999999@g.us" }
+      }
+    },
+    {
+      "agentId": "main",
+      "match": { "channel": "whatsapp" }
+    }
+  ]
+}
+```
+
+The specific group binding takes priority over the channel-wide rule. Everything else on WhatsApp goes to `main`.
+
+<Tip>
+Put more specific bindings ABOVE less specific ones. The matching is most-specific-wins, but listing them in order makes the config easier to read and reason about.
+</Tip>
+
+### Routing Example: Per-Person DM Routing
+
+You can even route individual people's DMs to different agents:
+
+```json
+{
+  "bindings": [
+    {
+      "agentId": "work",
+      "match": {
+        "channel": "whatsapp",
+        "peer": { "kind": "dm", "id": "+15555550123" }
+      }
+    }
+  ]
+}
+```
+
+Messages from that specific phone number go to the work agent. Everyone else hits the default.
+
+## Per-Agent Heartbeats
+
+Each agent can have its own heartbeat schedule, delivery target, and model:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "heartbeat": {
+        "every": "30m",
+        "target": "last"
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true
+      },
+      {
+        "id": "work",
+        "heartbeat": {
+          "every": "15m",
+          "target": "slack",
+          "activeHours": { "start": "09:00", "end": "18:00" }
+        }
+      },
+      {
+        "id": "social",
+        "heartbeat": {
+          "every": "1h",
+          "target": "telegram",
+          "model": "anthropic/claude-sonnet-4-5"
+        }
+      }
+    ]
+  }
+}
+```
+
+This gives you:
+- **Personal agent**: heartbeat every 30 minutes, delivers to whatever channel you last used
+- **Work agent**: heartbeat every 15 minutes during business hours, always delivers to Slack
+- **Social agent**: hourly heartbeat on a cheaper model, delivers to Telegram
+
+<Warning>
+Important gotcha: when ANY agent in `agents.list` has a `heartbeat` block, ONLY agents with explicit heartbeat blocks run heartbeats. If you add a heartbeat to `work` but not `main`, the main agent stops getting heartbeats. Give each agent an explicit heartbeat block (even if it just says `{}` to use the defaults).
+</Warning>
+
+## Per-Agent Tool Restrictions
+
+Different agents should have different tool access. Your personal agent might need everything. Your work agent shouldn't be able to read your personal files. Your social agent definitely shouldn't have shell access.
+
+```json
+{
+  "agents": {
+    "list": [
+      {
+        "id": "main",
+        "default": true
+      },
+      {
+        "id": "work",
+        "tools": {
+          "deny": ["browser", "nodes"]
+        }
+      },
+      {
+        "id": "social",
+        "tools": {
+          "allow": ["read", "write", "web_search", "web_fetch", "message"],
+          "deny": ["exec", "browser", "nodes", "gateway", "cron"]
+        }
+      }
+    ]
+  }
+}
+```
+
+The social agent can only read/write files, search the web, and send messages. It can't run shell commands, control the browser, or manage cron jobs. This is the principle of least privilege: give each agent only the tools it actually needs.
+
+## Per-Agent Sandboxing
+
+For agents that handle external content (customer messages, social media, etc.), consider sandboxing:
+
+```json
+{
+  "agents": {
+    "list": [
+      {
+        "id": "work",
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent"
+        }
+      }
+    ]
+  }
+}
+```
+
+With `mode: "all"`, the work agent runs in a sandboxed environment where file access is restricted to its sandbox workspace. This prevents it from accessing files belonging to other agents or your personal workspace.
+
+## Agent-to-Agent Communication
+
+Agents are isolated by default. They can't see each other's conversations or memory. But sometimes they need to talk.
+
+Your personal agent might need to ask the work agent about a Slack thread. Your work agent might need to alert the personal agent about something urgent. This is done through `sessions_send`:
+
+```json
+{
+  "subagents": {
+    "allowAgents": ["main", "work", "social"]
+  }
+}
+```
+
+With this config, any listed agent can send messages to any other listed agent. Your personal agent can say:
+
+> "Ask the work agent: what was the outcome of the customer call thread in #support today?"
+
+And behind the scenes, OpenClaw routes that message to the work agent's session, gets the response, and brings it back.
+
+<Note>
+Agent-to-agent communication is opt-in. Without `subagents.allowAgents`, agents can't see or talk to each other. This is a feature, not a bug. Isolation is the default because it's safer.
+</Note>
+
+## Multiple Channel Accounts
+
+Some channels support multiple accounts. For example, you might have two WhatsApp numbers: one personal and one for business. Or two Telegram bots with different purposes.
+
+```json
+{
+  "channels": {
+    "whatsapp": {
+      "accounts": {
+        "personal": {},
+        "business": {}
+      }
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": { "channel": "whatsapp", "accountId": "personal" }
+    },
+    {
+      "agentId": "work",
+      "match": { "channel": "whatsapp", "accountId": "business" }
+    }
+  ]
+}
+```
+
+Messages arriving on the personal WhatsApp go to the personal agent. Messages on the business WhatsApp go to the work agent. Completely isolated conversations on completely separate phone numbers.
+
+## Real-World Example: A Full Setup
+
+Here's a realistic multi-agent config for someone running a small SaaS:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "heartbeat": {
+        "every": "30m",
+        "activeHours": { "start": "08:00", "end": "22:00" }
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Atlas",
+        "heartbeat": {
+          "target": "last"
+        }
+      },
+      {
+        "id": "work",
+        "name": "Ops",
+        "model": "anthropic/claude-opus-4-6",
+        "heartbeat": {
+          "every": "15m",
+          "target": "slack",
+          "activeHours": { "start": "09:00", "end": "18:00" }
+        },
+        "tools": {
+          "deny": ["browser", "nodes"]
+        }
+      },
+      {
+        "id": "social",
+        "name": "Khan",
+        "model": "anthropic/claude-sonnet-4-5",
+        "heartbeat": {
+          "every": "1h",
+          "target": "telegram"
+        },
+        "tools": {
+          "deny": ["exec", "browser", "nodes", "gateway"]
+        }
+      }
+    ]
+  },
+  "bindings": [
+    { "agentId": "work", "match": { "channel": "slack" } },
+    { "agentId": "social", "match": { "channel": "telegram" } }
+  ],
+  "subagents": {
+    "allowAgents": ["main", "work", "social"]
+  }
+}
+```
+
+Three agents:
+- **Atlas** (main): personal assistant on iMessage, full tool access, heartbeat every 30 minutes
+- **Ops** (work): Slack watcher, 15-minute heartbeat during business hours, no browser
+- **Khan** (social): Telegram bot, hourly heartbeat on a cheaper model, restricted tools
+
+Each has its own personality, memory, and focus. One Gateway runs them all.
+
+## Scaling Tips
+
+**Start with two agents, not seven.** The most natural first split is personal vs. work. Add more only when a clear need emerges.
+
+**Use cheaper models for less critical agents.** Your personal Opus agent is your power tool. The social media agent that checks engagement every hour? Sonnet is more than enough.
+
+**Keep workspaces lean.** Each agent loads its workspace files into context. Bloated SOUL.md or AGENTS.md files burn tokens across every session and heartbeat for that agent.
+
+**Monitor token costs.** Multiple agents with heartbeats means multiple model calls every interval. Use `openclaw status` to see aggregate usage and adjust intervals or models as needed.
+
+**Don't over-isolate.** You don't need a separate agent for every task. If two responsibilities share context (like calendar and email), keep them in one agent. Split when the contexts genuinely don't overlap.
+
+## Managing Your Agents
+
+Useful commands for day-to-day management:
+
+```bash
+openclaw agents list              # see all agents
+openclaw agents list --bindings   # see agents + their routing rules
+openclaw status                   # overview of all running agents
+openclaw status --deep            # detailed health check
+openclaw doctor                   # diagnose config issues
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Messages going to the wrong agent">
+    Check your bindings:
+
+    ```bash
+    openclaw agents list --bindings
+    ```
+
+    Remember that more specific bindings take priority. If you have a channel-wide rule sending all WhatsApp to `main`, but also a peer-specific rule sending one group to `work`, the peer rule wins for that group.
+
+    If two bindings match at the same specificity level, the first one listed wins. Reorder your bindings to fix priority issues.
+  </Accordion>
+
+  <Accordion title="Agent not responding on its channel">
+    Verify the agent is properly configured:
+
+    1. Is it listed in `agents.list`? `openclaw agents list`
+    2. Does it have a binding for the channel? `openclaw agents list --bindings`
+    3. Is the channel active? `openclaw channels status`
+    4. Can you reach it via the dashboard? Select the agent in the Control UI and try chatting.
+
+    If the channel works but the agent doesn't, check the agent's workspace for issues (`openclaw doctor`).
+  </Accordion>
+
+  <Accordion title="Heartbeats running for wrong agents">
+    When ANY agent has an explicit `heartbeat` block in `agents.list`, only agents with explicit blocks get heartbeats. If your main agent suddenly stopped getting heartbeats after you added a heartbeat config to your work agent, add an explicit block to main too:
+
+    ```json
+    {
+      "id": "main",
+      "default": true,
+      "heartbeat": {}
+    }
+    ```
+
+    An empty `heartbeat: {}` inherits all values from `agents.defaults.heartbeat`.
+  </Accordion>
+
+  <Accordion title="Config changes aren't taking effect">
+    After editing `openclaw.json`, restart the gateway:
+
+    ```bash
+    openclaw gateway restart
+    ```
+
+    The Gateway only reads config on startup. You can also send a reload signal without a full restart:
+
+    ```bash
+    kill -USR1 $(pgrep -f "openclaw gateway")
+    ```
+
+    If things still seem wrong, run `openclaw doctor` to validate your config.
+  </Accordion>
+</AccordionGroup>
+
+## What You Just Built
+
+You now have a multi-agent system running on one machine. Multiple AI personalities, each with their own domain, their own memory, their own communication channels. They can work independently or collaborate when needed.
+
+This is the architecture that makes OpenClaw different from every other AI tool. It's not one chatbot doing everything. It's a team of specialized agents, each focused on what it does best, all orchestrated through a single Gateway.
+
+Next up: scheduling with cron jobs. You've seen cron briefly in Module 6, but there's much more to it. Recurring reports, one-shot reminders, delivery to specific channels, and combining cron with heartbeats for a complete automation layer.
+
+<Card
+  title="Next: Cron Jobs & Scheduling"
+  icon="arrow-right"
+  href="/tutorial/cron"
+  horizontal
+>
+  Schedule recurring tasks, one-shot reminders, and automated reports.
+</Card>
