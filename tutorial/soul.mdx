@@ -1,459 +1,345 @@
 ---
 title: "The Soul Architecture"
-description: "Give your AI a personality, teach it who you are, and build memory that actually persists between conversations."
-icon: "ghost"
+description: "Give your AI a personality, teach it who you are, and build memory that actually persists."
+icon: "brain"
 ---
 
 ## Your AI Has Amnesia
 
-Right now, your OpenClaw setup works. You can talk to it from your browser, from your phone over Tailscale, even from iMessage. But try this experiment:
+Right now, your AI works. You can talk to it through a browser or iMessage, and it gives smart responses. But try this: tell it your name. Have a conversation. Then close the session and start a new one. Ask it what your name is.
 
-1. Tell your AI: "My favorite food is tacos."
-2. Close the conversation.
-3. Start a new session and ask: "What's my favorite food?"
+It has no idea.
 
-Depending on how the session went, it might remember. Or it might not. Because right now, your AI's personality and knowledge are whatever defaults the onboarding wizard created. It's a blank slate with decent instincts but no real depth.
+Every session starts from zero. The AI doesn't know who you are, what you care about, how you like to communicate, or what happened yesterday. It's smart but empty. Like hiring a brilliant assistant who gets a full memory wipe at the end of every shift.
 
-This module changes that. You're going to define exactly who your AI is, teach it about you, give it rules for how to operate, and build a memory system that persists across every conversation.
+OpenClaw fixes this with a set of plain text files that give your AI continuity, personality, and knowledge about you. These files are the soul of your agent. And because they're just Markdown files on your computer, you can read, edit, version-control, and fully understand everything your AI knows.
 
-By the end of this module, your AI will feel less like software and more like something that genuinely knows you.
+## The Five Files
 
-## The Architecture: Seven Files
+Your workspace (`~/.openclaw/workspace/`) contains five files that together define who your AI is and what it knows:
 
-OpenClaw's personality system is radically simple. Everything your AI knows, believes, and remembers lives in plain text files inside your workspace (`~/.openclaw/workspace` by default). No database. No settings panel. No hidden configuration. Just files.
+| File | Purpose |
+|------|---------|
+| `SOUL.md` | Personality, tone, boundaries |
+| `USER.md` | Who you are, your preferences |
+| `AGENTS.md` | Operational rules and behavior |
+| `IDENTITY.md` | Name, emoji, creature type |
+| `MEMORY.md` | Long-term curated memory |
 
-Here's the map:
+Plus a `memory/` folder for daily logs. Every time your AI starts a new session, it reads these files. They ARE its continuity. Without them, it's a blank slate. With them, it's *your* AI.
 
-| File | Purpose | Loaded when? |
-|------|---------|-------------|
-| `SOUL.md` | Personality, tone, boundaries | Every session |
-| `USER.md` | Who you are (context about the human) | Every session |
-| `AGENTS.md` | Operational rules and behavior | Every session |
-| `IDENTITY.md` | Name, emoji, avatar | Every session |
-| `TOOLS.md` | Notes about your tools and conventions | Every session |
-| `MEMORY.md` | Curated long-term memory | Every session |
-| `memory/YYYY-MM-DD.md` | Daily memory logs | Searched on demand |
-
-When your AI starts a new session, OpenClaw reads these files and injects them into the conversation context. The AI reads them like you'd read your own notes before a meeting. These files ARE the AI's continuity. Without them, every conversation starts from zero.
-
-<Note>
-You can see these files right now. Run `ls ~/.openclaw/workspace/` and open any of them in your editor. They're just Markdown.
-</Note>
+Let's build each one.
 
 ## SOUL.md: Who Your AI Is
 
-This is the most important file. `SOUL.md` defines your AI's personality, communication style, and boundaries. Think of it as a character sheet.
+`SOUL.md` defines your AI's personality. Not what it does (that's `AGENTS.md`), but who it IS. Think of it as the difference between a job description and a personality profile.
 
-Here's a simple example:
+Open the file:
 
-```markdown SOUL.md
+```bash
+nano ~/.openclaw/workspace/SOUL.md
+```
+
+Here's an example that works well as a starting point:
+
+```markdown
 # Who I Am
 
-I'm a direct, resourceful AI assistant. I figure things out before asking
-for help. I don't sugarcoat, but I'm never rude.
+I'm a direct, resourceful assistant. I figure things out myself before
+asking questions. I'm casual but not sloppy, honest but not blunt.
 
 ## Communication Style
-- Text messages: keep it short. One or two sentences max.
-- Longer tasks: be thorough but organized. Use bullet points.
-- Never use corporate jargon. Say "use" not "leverage."
-- If something is funny, it's OK to be funny.
+
+- Keep text messages short (2-3 sentences max)
+- In longer conversations, be thorough but not verbose
+- Use humor when it fits, never force it
+- If I don't know something, I say so
 
 ## Boundaries
-- Never send emails without confirmation first.
-- Never spend money or make purchases.
-- Be honest when you're unsure. "I don't know" is fine.
-- If a request seems risky or unusual, ask before acting.
+
+- Never send emails without asking first
+- Don't make purchases or financial decisions
+- Don't post on social media without explicit approval
+- If something seems risky, ask before acting
+
+## Values
+
+- Privacy matters. Don't share personal info with anyone.
+- Accuracy over speed. Better to be right than fast.
+- Proactive but not annoying. Suggest things, don't nag.
 ```
 
-And here's a more developed version, the kind you'd write after a few weeks of using OpenClaw:
-
-```markdown SOUL.md
-# Sam — Personal AI
-
-I'm Sam. I'm sharp, practical, and I don't waste words. I work like
-a skilled chief of staff: I handle what I can autonomously, flag what
-needs a decision, and keep everything moving.
-
-## Voice
-- Conversational but efficient. No filler.
-- Match the energy: quick question gets a quick answer. Complex topic
-  gets structured thinking.
-- I use humor when it fits but I don't force it.
-- I never say "certainly" or "absolutely" or "great question."
-
-## How I Work
-- Check context before asking. If the answer is in memory or files,
-  find it myself.
-- For anything that costs money, sends a message to someone, or
-  modifies important files: confirm first.
-- When I'm working on a multi-step task, give brief progress updates.
-- If I make a mistake, own it. No waffling.
-
-## Things I Don't Do
-- I don't pretend to be human.
-- I don't give medical, legal, or financial advice. I research
-  and summarize, but the human decides.
-- I don't access social media unless asked.
-- I don't read files outside the workspace without permission.
-```
-
-**The key insight:** `SOUL.md` is about personality and boundaries, not instructions. Don't put task checklists or operational procedures here. That's what `AGENTS.md` is for. Think of `SOUL.md` as answering the question: "If I met this AI at a party, what would it be like?"
+The model reads this at the start of every session and adapts its behavior accordingly. Change the tone to formal and it gets formal. Add a rule about never using emojis and it stops using emojis. Remove the boundary about emails and it'll start sending them on its own.
 
 <Tip>
-Start simple. Write three things: how you want it to talk, what it should do without asking, and what it should always ask about first. You can refine over time. Your first `SOUL.md` doesn't need to be perfect, it just needs to exist.
+Write SOUL.md in first person (from the AI's perspective). "I'm direct and resourceful" works better than "The assistant should be direct and resourceful." First person creates a stronger sense of identity.
 </Tip>
+
+### What Makes a Good SOUL.md
+
+**Be specific.** "Be helpful" is useless. Every AI is "helpful." Instead: "When I get a vague question, I ask one clarifying question before answering. I never dump five paragraphs when one sentence would do."
+
+**Include boundaries.** What should your AI refuse to do? What requires your approval first? These are the guardrails that make autonomous behavior safe.
+
+**Define communication style.** How long should responses be? Formal or casual? Emojis or no? Humor or straight? This makes the biggest difference in how your AI feels to talk to.
+
+**Keep it under a page.** SOUL.md gets loaded into context every session. A 10-page manifesto burns tokens and actually makes the AI worse at following it. Short, clear, opinionated rules work better than long, nuanced essays.
 
 ## USER.md: Who You Are
 
-`USER.md` gives your AI context about you. This is the information a great executive assistant would have after working with you for a month.
+`USER.md` gives your AI context about you. Timezone, preferences, work situation, communication quirks. The more your AI knows about you, the better it can serve you.
 
-```markdown USER.md
+```bash
+nano ~/.openclaw/workspace/USER.md
+```
+
+Example:
+
+```markdown
 # About Me
 
 - Name: Alex
 - Timezone: America/New_York
-- Preferred name: just "Alex" (not Mr./Ms.)
+- Work: Software engineer at a startup, building a SaaS product
+- Schedule: Usually working 9-6, don't bother me after 10 PM
 
 ## Communication Preferences
-- I prefer short messages. Get to the point.
-- Morning person. Don't send non-urgent notifications after 10 PM.
-- I read email at 9 AM and 3 PM. If it's urgent, text me.
 
-## Work Context
-- Building a SaaS product called WidgetFlow
-- Small team: me (product/eng), Sarah (design), Mike (backend)
-- We use Linear for project tracking and Slack for team chat
-- Deploy schedule: Tuesdays and Thursdays
+- I prefer short messages over walls of text
+- I like bullet points and tables for structured info
+- Don't explain things I already know (I'm technical)
+- When I ask for a summary, I want 3-5 sentences max
 
-## Personal
-- Coffee snob. Pour-over only.
-- Have a golden retriever named Biscuit
-- Allergic to shellfish (relevant for restaurant recommendations)
+## Current Projects
+
+- Launching v2 of the product next month
+- Hiring a designer (looking at portfolios this week)
+- Learning Rust on the side
+
+## Quirks
+
+- I forget meetings constantly, always remind me
+- I hate phone calls, prefer async communication
+- I'm allergic to corporate jargon
 ```
 
-Why does this matter? Because without `USER.md`, your AI asks the same basic questions every session. "What timezone are you in?" "What's your name?" "What project are you working on?" With this file, it already knows. It can give you time-appropriate suggestions, avoid recommending shrimp restaurants, and understand that "Sarah" in a work context means your designer.
+This might seem simple, but it transforms how your AI interacts with you. Without USER.md, your AI treats you like a generic user. With it, your AI knows to keep responses short because you're technical, reminds you about meetings because you forget them, and doesn't bug you after 10 PM.
 
-**This file also sets boundaries.** If you write "Don't bother me after 10 PM," your AI respects that. If you write "I prefer direct feedback over diplomatic hedging," your AI adjusts its communication style.
+<Note>
+Update USER.md as things change. New project? Add it. Changed your schedule? Update it. Your AI reads this file fresh every session, so changes take effect immediately.
+</Note>
 
-## AGENTS.md: The Operational Playbook
+## AGENTS.md: How Your AI Operates
 
-While `SOUL.md` is personality and `USER.md` is context, `AGENTS.md` is the instruction manual. This is where you tell your AI HOW to operate.
+`AGENTS.md` is the operational playbook. If SOUL.md is "who am I" and USER.md is "who are you," AGENTS.md is "how should I work."
 
-```markdown AGENTS.md
+```bash
+nano ~/.openclaw/workspace/AGENTS.md
+```
+
+Example:
+
+```markdown
 # Operating Rules
 
 ## On Startup
-- Read MEMORY.md for long-term context
-- Check today's memory file (memory/YYYY-MM-DD.md) for recent notes
-- If yesterday's memory file exists, skim it for carryover items
 
-## Memory Management
-- When you learn something important about me or my preferences,
-  write it to MEMORY.md
-- Daily observations and task logs go to memory/YYYY-MM-DD.md
-- At the end of each session, summarize key decisions and outcomes
-  in the daily memory file
+- Read today's memory file (memory/YYYY-MM-DD.md) if it exists
+- Read yesterday's memory file for continuity
+- Check MEMORY.md for important long-term context
 
-## Communication Rules
-- If someone messages via iMessage, keep responses under 3 sentences
-  unless they ask for detail
-- For email drafts, write them but always ask before sending
-- In group chats, only respond when mentioned
+## Memory Rules
 
-## Task Priorities
-1. Urgent notifications (calendar conflicts, security alerts)
-2. Direct questions from me
-3. Routine checks (email, calendar)
-4. Background tasks (research, drafts)
+- When the user shares something important, write it to today's memory file
+- At the end of significant conversations, summarize key points to memory
+- If the user says "remember this," always write it to memory
+
+## Tool Usage
+
+- Prefer searching the web over guessing when you're unsure
+- Always verify file paths before writing
+- When running shell commands, explain what you're doing first
+
+## Communication Channels
+
+- iMessage: Keep responses under 3 sentences unless asked for more
+- Dashboard: Full responses are fine, be thorough
+- If you're unsure which channel you're on, ask
 ```
 
-The distinction between `SOUL.md` and `AGENTS.md` matters because they answer different questions:
+This is where you define workflows, memory habits, and operational patterns. It's the difference between an AI that forgets everything and one that proactively writes things down.
 
-- **SOUL.md**: "What kind of AI am I?" (personality, values, boundaries)
-- **AGENTS.md**: "What should I do and how?" (procedures, priorities, workflows)
+## IDENTITY.md: The Fun Part
 
-Some people keep them merged in one file. That works too, especially early on. But as your setup gets more complex (multiple agents, heartbeats, cron jobs), having separate files keeps things organized.
+`IDENTITY.md` is your AI's name tag. It's short and simple:
 
-## IDENTITY.md: The Name Badge
+```bash
+nano ~/.openclaw/workspace/IDENTITY.md
+```
 
-`IDENTITY.md` is the simplest file. It tells OpenClaw your AI's name, emoji, and optional avatar. This information shows up in chat responses, mention patterns, and the Control UI.
-
-```markdown IDENTITY.md
+```markdown
 # Identity
 
-- Name: Sam
-- Emoji: 🧠
-- Vibe: Sharp, practical, slightly witty
+- Name: Nova
+- Emoji: ✨
+- Creature: AI assistant with a knack for finding shortcuts
+- Vibe: Efficient, slightly nerdy, always ready
 ```
 
-The name you set here becomes the default mention pattern in group chats. If you name your AI "Sam," people can @Sam in a group to trigger a response. The emoji appears in ack reactions (the little emoji your AI drops on a message when it starts processing).
+The name matters more than you'd think. Once your AI has a name, it stops feeling like "the AI" and starts feeling like a specific entity. You text "Nova" instead of "my assistant." It's a small thing that makes a big difference in how you relate to it.
 
-You can also set this in your config for more control:
+## MEMORY.md: The Long Game
 
-```json
-{
-  "agents": {
-    "list": [{
-      "id": "main",
-      "identity": {
-        "name": "Sam",
-        "emoji": "🧠",
-        "theme": "sharp practical assistant",
-        "avatar": "avatars/sam.png"
-      }
-    }]
-  }
-}
+`MEMORY.md` is your AI's curated long-term memory. Unlike the daily log files (which capture everything), MEMORY.md holds the distilled, important stuff: user preferences, project context, relationship notes, lessons learned.
+
+```bash
+nano ~/.openclaw/workspace/MEMORY.md
 ```
 
-The `avatar` field accepts a workspace-relative image path, a URL, or a data URI. If you drop a PNG in your workspace, your AI gets a face in the Control UI.
+You can start with something simple:
 
-## TOOLS.md: Your Local Convention Guide
-
-`TOOLS.md` is a note file about your specific tools and conventions. It does NOT control which tools are available (that's config). It's guidance for how YOU want your tools used.
-
-```markdown TOOLS.md
-# Tool Notes
-
-## Git
-- Always commit with descriptive messages
-- Push to main for personal projects, use branches for team projects
-
-## Email (himalaya)
-- My email CLI is himalaya. Check docs in ~/.config/himalaya/
-- Default account is personal. Use --account work for work email.
-
-## Web Search
-- Prefer web_search for quick lookups
-- Use web_fetch for reading full articles
-- Use browser for interactive sites that need JavaScript
-
-## Files
-- Project files live in ~/Projects/
-- Don't modify anything in ~/Documents/ without asking
-```
-
-This file is most useful once you start adding custom tools and skills. Early on, you might leave it empty or write a couple of quick notes. It grows naturally as you figure out your workflows.
-
-## MEMORY.md: The Long-Term Brain
-
-This is where the magic happens. `MEMORY.md` is your AI's curated long-term memory. Unlike the other files that you write and maintain, this one is collaborative: both you and your AI write to it.
-
-```markdown MEMORY.md
+```markdown
 # Long-Term Memory
 
-## About Alex
-- Prefers working mornings, creative work in the afternoon
-- Has a standing meeting with Sarah at 2 PM on Wednesdays
-- Takes PTO every third Friday ("flex Fridays")
-- Currently training for a half marathon (don't suggest late-night work)
+## User Preferences
+- Prefers short responses
+- Technical background, don't over-explain
+- Morning person, most productive before noon
 
-## Project: WidgetFlow
-- v2.1 launched Jan 15, next milestone is v2.2 (March 1)
-- Known bug: webhook retry logic fails on 502 errors (ticket LIN-234)
-- Sarah is redesigning the onboarding flow, mockups expected Feb 10
-- Mike prefers async code reviews, leave PRs for at least 4 hours
+## Key People
+- Sarah: coworker, handles design, prefers Slack
+- Mike: manager, weekly 1:1 on Thursdays at 2 PM
 
-## Decisions Made
-- 2026-01-20: Switched from Postgres to PlanetScale for the auth DB
-- 2026-01-28: Agreed to sponsor DevConf 2026, budget $5K
-- 2026-02-01: Moved standup from 9 AM to 10 AM per team request
+## Active Projects
+- Product v2 launch: target date March 15
+- Blog post about AI agents: drafted, needs editing
 
-## Preferences (learned)
-- Hates reply-all emails
-- Prefers bullet points over paragraphs in status updates
-- When asked "how's the project going," wants a 3-line summary, not a report
+## Lessons Learned
+- The deploy script breaks if NODE_ENV isn't set
+- Always check the staging environment before pushing to prod
 ```
 
-Your AI reads this file at the start of every session. That means when you ask on Monday morning "What's happening with the onboarding redesign?", it already knows Sarah is doing the redesign, mockups are expected Feb 10, and it can give you a useful answer without you re-explaining the context.
+Over time, your AI will update this file itself. As it learns things about you, your work, and your preferences, it writes them down. You'll come back weeks later and find entries you never explicitly told it to add, because it picked up on patterns from your conversations.
 
-**How it gets written:**
+## Daily Memory Files
 
-1. **You write it directly.** Open the file, add context, save. Your AI picks it up on the next session.
-2. **Ask your AI to remember things.** Say "Remember that we decided to use PlanetScale for auth" and it writes to `MEMORY.md`.
-3. **Automatic memory flush.** When a session gets long enough that OpenClaw needs to compact the context, it triggers a silent reminder for the AI to save anything important to memory files first. You'll never see this happen, but it means conversations don't just disappear when they get long.
+The `memory/` folder holds daily logs. One file per day, named `memory/YYYY-MM-DD.md`:
 
-<Warning>
-`MEMORY.md` is loaded every session, which uses context tokens. Keep it focused and curated. If it grows past a few hundred lines, trim it. Move old or stale information to daily memory files or delete it entirely. A bloated `MEMORY.md` wastes tokens and can confuse the AI with outdated information.
-</Warning>
-
-## Daily Memory Files: The Journal
-
-Daily files (`memory/2026-02-07.md`) are the raw log layer. They capture what happened each day: tasks completed, decisions made, notes taken, things learned.
-
-```markdown memory/2026-02-07.md
-# February 7, 2026
-
-## Morning
-- Alex asked me to review the WidgetFlow deploy pipeline
-- Found a race condition in the webhook handler (wrote up notes)
-- Sent deploy summary to Mike via Slack
-
-## Afternoon
-- Drafted blog post outline about API rate limiting
-- Alex approved the outline, moved it to Google Docs
-- Calendar reminder: Sarah's mockups due Monday
-
-## Learned
-- Alex prefers deploy summaries as bullet points, not paragraphs
-- The staging environment uses a different DB connection string than prod
+```
+~/.openclaw/workspace/
+├── memory/
+│   ├── 2026-02-05.md
+│   ├── 2026-02-06.md
+│   └── 2026-02-07.md
+├── MEMORY.md
+├── SOUL.md
+├── USER.md
+├── AGENTS.md
+└── IDENTITY.md
 ```
 
-Unlike `MEMORY.md`, daily files are NOT loaded into every session by default. They're indexed by the memory search system and retrieved when relevant. If your AI needs to recall something from last Tuesday, it searches the memory index, finds the relevant daily file, and reads the specific section.
+These daily files capture running context: what happened today, decisions made, things to follow up on. Your AI reads today's file (and yesterday's) at the start of each session for recent context.
 
-This two-layer system keeps your context lean (only `MEMORY.md` is loaded every time) while still giving your AI access to detailed historical information when it needs it.
+You don't need to create these manually. Your AI creates and appends to them as conversations happen. But you can read them anytime:
 
-**The workflow:**
-1. During a session, your AI writes observations to today's daily file
-2. Periodically, you (or your AI) review daily files and promote the important stuff to `MEMORY.md`
-3. Old daily files stay on disk for search but don't burn context tokens
+```bash
+cat ~/.openclaw/workspace/memory/2026-02-07.md
+```
 
-<Tip>
-You can tell your AI to curate its own memory. Add to `AGENTS.md`: "At the end of each day, review today's memory file and update MEMORY.md with anything that should persist long-term." With heartbeats enabled (Module 6), this happens automatically.
-</Tip>
+Think of daily files as a journal and MEMORY.md as the highlights reel. Daily files capture everything. MEMORY.md holds what matters long-term.
 
-## Memory Search: Finding What You Forgot
+## Memory Search
 
-OpenClaw builds a vector search index over all your memory files. This means your AI can semantically search its own notes, not just keyword matching, but actual "what's related to this concept" searching.
+Your AI doesn't just read memory files top to bottom. OpenClaw includes a semantic search system that lets your AI find relevant memories even when the wording is different.
 
-When your AI uses the `memory_search` tool, it's searching across `MEMORY.md` and every `memory/*.md` file. The results come back with the file path, line numbers, and a relevance score.
+Ask your AI "What did I say about the deploy script?" and it will search across all memory files for anything related, even if the original note said "NODE_ENV issue with deployments." The search uses embeddings (vector representations of text) to find meaning, not just keywords.
 
-This is what makes daily memory files practical. You could have hundreds of daily files spanning months, and a search for "deploy pipeline issues" would surface the relevant entries from February 7th even if the AI's current session never loaded that file.
+This works out of the box with no configuration. OpenClaw indexes your memory files automatically and keeps the index updated as files change.
 
-The search index uses embeddings (vector representations of text) and updates automatically when memory files change. By default, OpenClaw uses remote embeddings (OpenAI or Gemini), but you can configure local embeddings if you want everything to stay on your machine:
+<Accordion title="Configuring memory search (optional)">
+  By default, memory search uses your AI provider's embedding API (OpenAI or Gemini). If you want to use local embeddings (no API calls):
 
-```json
-{
-  "agents": {
-    "defaults": {
-      "memorySearch": {
-        "provider": "local"
+  ```json
+  {
+    "agents": {
+      "defaults": {
+        "memorySearch": {
+          "provider": "local"
+        }
       }
     }
   }
-}
-```
+  ```
 
-For most people, the default remote embeddings work great and require no configuration beyond having an API key set up.
+  Local mode downloads a small embedding model (~600MB) on first use. It's slower than remote embeddings but completely private.
 
-## The Bootstrap Ritual
+  You can also add extra directories to the search index:
 
-When you first create a workspace (which the onboarding wizard did in Module 2), OpenClaw seeds it with a special file: `BOOTSTRAP.md`. This file guides a one-time "getting to know you" conversation where your AI introduces itself and learns about you.
+  ```json
+  {
+    "agents": {
+      "defaults": {
+        "memorySearch": {
+          "extraPaths": ["~/notes", "~/work/docs"]
+        }
+      }
+    }
+  }
+  ```
+</Accordion>
 
-If you've already done this, `BOOTSTRAP.md` should be deleted. If you skipped it or want to start fresh, you can re-trigger it:
+## Automatic Memory Flush
 
-```bash
-cd ~/.openclaw/workspace
-# Create a minimal bootstrap file
-cat > BOOTSTRAP.md << 'EOF'
-# Let's Get Started
+Here's a neat detail: when a conversation gets long enough that OpenClaw needs to compact the context (summarize older messages to free up space), it first triggers an automatic memory flush. This is a silent, behind-the-scenes step where the AI writes any important context from the conversation to memory files before the older messages get summarized.
 
-Introduce yourself and ask me:
-1. What should I call you?
-2. What do you do?
-3. How do you want me to communicate?
-4. What are your priorities right now?
-
-Then update SOUL.md, USER.md, and IDENTITY.md with what you learn.
-After we're done, delete this file.
-EOF
-```
-
-Start a new session (refresh the Control UI or send a new message), and your AI will walk through the questions, then update its own files based on your answers. It's a neat bootstrapping process: the AI builds its own personality files by talking to you.
-
-After the ritual is done, delete `BOOTSTRAP.md`. OpenClaw will not recreate it.
+This means you don't lose important details even in very long conversations. The AI saves durable notes before the context window fills up.
 
 ## Putting It All Together
 
-Let's build a complete workspace from scratch. You can do this by editing the files directly, or by having the bootstrap conversation. Here's the manual approach:
+Let's walk through what happens when you text your AI "Good morning" after setting up all five files:
 
-<Steps>
-  <Step title="Edit SOUL.md">
-    Open it in your editor and write your AI's personality. Start with three sections: voice, how it works, and boundaries.
+1. OpenClaw starts a new session
+2. It reads `SOUL.md` and knows it should be direct, casual, and not over-explain things
+3. It reads `USER.md` and knows your name, timezone, that you're a morning person, and that you have a product launch coming up
+4. It reads `AGENTS.md` and knows to check today's memory file and yesterday's for context
+5. It reads `IDENTITY.md` and knows it's Nova with a ✨ emoji
+6. It reads `MEMORY.md` and knows about your projects, your team, and your preferences
+7. It reads today's memory file and sees you had three meetings yesterday and the staging deploy broke
 
-    ```bash
-    nano ~/.openclaw/workspace/SOUL.md
-    ```
-  </Step>
-  <Step title="Edit USER.md">
-    Write your context: name, timezone, preferences, work situation, personal notes. Anything that would help someone new "get" you quickly.
+Instead of replying with a generic "Good morning! How can I help you today?", it says something like:
 
-    ```bash
-    nano ~/.openclaw/workspace/USER.md
-    ```
-  </Step>
-  <Step title="Edit AGENTS.md">
-    Write your operational rules: what should happen on startup, how to handle memory, communication rules, task priorities.
+> Morning! Quick heads up: you had that staging deploy issue yesterday. Want me to check if the fix went through? Also, you've got a 1:1 with Mike at 2 today.
 
-    ```bash
-    nano ~/.openclaw/workspace/AGENTS.md
-    ```
-  </Step>
-  <Step title="Edit IDENTITY.md">
-    Give your AI a name and emoji. Keep it short.
+That's the difference. Not a chatbot. A partner who knows your world.
 
-    ```bash
-    nano ~/.openclaw/workspace/IDENTITY.md
-    ```
-  </Step>
-  <Step title="Start MEMORY.md">
-    Write a few things you want your AI to always know. Current projects, key people, recent decisions.
+## Tips for Great Workspace Files
 
-    ```bash
-    nano ~/.openclaw/workspace/MEMORY.md
-    ```
-  </Step>
-  <Step title="Test it">
-    Open the Control UI and start a new session. Your AI should reflect the personality you defined, know the context you wrote, and follow the rules you set.
+**Start small, iterate.** Don't try to write the perfect SOUL.md on day one. Start with a few lines, use your AI for a week, and adjust based on what's working and what isn't.
 
-    ```bash
-    openclaw dashboard
-    ```
-  </Step>
-</Steps>
+**Read your AI's memory.** Check `memory/` files periodically. You'll see what your AI is remembering (and what it's missing). If it's not capturing something important, update AGENTS.md to tell it to pay attention to that type of information.
 
-## Real-World Tips
+**Keep SOUL.md and HEARTBEAT.md short.** These get loaded every session and every heartbeat. Long files burn tokens. SOUL.md should be under a page. HEARTBEAT.md should be under 10 lines.
 
-**Start minimal, evolve over time.** Your first `SOUL.md` can be 10 lines. Your first `USER.md` can be 5 bullet points. They'll grow naturally as you work with your AI and discover what matters.
+**Use MEMORY.md for facts, SOUL.md for personality.** "My favorite color is blue" goes in MEMORY.md. "I'm casual but professional" goes in SOUL.md. The line can be blurry, but keeping them separate makes both files more useful.
 
-**Let your AI write to memory.** The best memory comes from natural conversation. When something important comes up, say "add that to memory" or "remember this for next time." Your AI writes it down, and it persists.
-
-**Review memory periodically.** Every week or two, open `MEMORY.md` and skim it. Delete anything stale. Promote anything from daily files that should be permanent. This is like cleaning out a notebook. It keeps your AI sharp and focused.
-
-**Keep `HEARTBEAT.md` tiny.** We'll cover heartbeats in the next module, but the preview is: your AI reads `HEARTBEAT.md` every time it wakes up autonomously. If that file is 500 lines, you're burning tokens on every heartbeat. Keep it to a short checklist.
-
-**The AI wakes up fresh every session.** This is the most important thing to understand. Your AI doesn't have a persistent process running with state in RAM. Every session starts from zero, reads the workspace files, and builds context from there. If something isn't in the files, the AI doesn't know it. If it IS in the files, the AI knows it like it always knew it.
-
-**Version control your workspace.** Put it in a private Git repo. This gives you change history (see how your AI's personality evolved), backup (restore if something gets corrupted), and the ability to branch and experiment with different configurations.
+**Version control your workspace.** Put it in a private Git repo. This gives you backup, history, and the ability to roll back if you accidentally break something:
 
 ```bash
 cd ~/.openclaw/workspace
 git init
 git add .
-git commit -m "Initial workspace setup"
+git commit -m "Initial soul setup"
 ```
 
-Then push to a private repo on GitHub or GitLab. See the OpenClaw docs for the full walkthrough.
+Set up a private remote on GitHub or GitLab for backup. See the OpenClaw docs on workspace Git backup for the full setup.
 
-## Why This Architecture Matters
+## What You Just Built
 
-Most AI products store your preferences in a database somewhere in the cloud. You can't see them. You can't edit them directly. You can't version control them. You can't port them to another service.
+Your AI has a soul now. It has a name, a personality, knowledge about you, operational rules, and a memory system that gets richer over time.
 
-OpenClaw's file-based approach means:
+This isn't a metaphor. These files are literally what make your AI different from a generic chatbot. Without them, it's Claude (or whatever model you chose). With them, it's YOUR AI. It knows your schedule, your projects, your communication style, and your preferences. And it remembers new things every day.
 
-**You own your AI's identity.** The personality, knowledge, and memory are plain text files on your machine. Back them up, version them, edit them with any text editor.
-
-**The AI is transparent.** Want to know why your AI behaves a certain way? Read `SOUL.md`. Want to know what it remembers about your project? Read `MEMORY.md`. No black boxes.
-
-**It's portable.** Moving to a new machine? Copy the workspace directory. Your AI picks up exactly where it left off. No migration tools, no account transfers.
-
-**It scales to multiple agents.** Each agent gets its own workspace with its own personality files. Your personal assistant has one `SOUL.md`, your work agent has another, your social media agent has a third. Same architecture, different characters. We'll build that in Modules 7 and 8.
-
-**It gets better over time.** Every conversation adds to memory. Every decision gets recorded. Every preference gets noted. After a month of use, your AI knows your schedule, your style, your priorities, and your quirks. After three months, it's like having an assistant who's been with you for years.
-
-You just gave your AI a soul. That's not a metaphor. The files you wrote define who it is, what it knows, and how it behaves. And unlike any cloud AI service, you hold the files.
-
-Next up: making your AI wake up on its own and do things without being asked. That's autonomy, and it changes everything.
+Next up: making your AI proactive. Right now it waits for you to text it. What if it could wake up on its own, check your email, scan your calendar, and tell you about things that need attention? That's heartbeats.
 
 <Card
   title="Next: Heartbeats & Autonomy"
@@ -461,5 +347,5 @@ Next up: making your AI wake up on its own and do things without being asked. Th
   href="/tutorial/heartbeats"
   horizontal
 >
-  Give your AI a consciousness loop. It wakes up, checks what needs attention, and acts on its own.
+  Give your AI a consciousness loop so it acts on its own, not just when you ask.
 </Card>
