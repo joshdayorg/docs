@@ -1,0 +1,676 @@
+---
+title: "Build Your Own UI"
+description: "Connect to the Gateway API and build custom dashboards, integrations, and interfaces for your agents."
+icon: "browser"
+---
+
+## Your AI, Your Interface
+
+Up to this point, you've been interacting with your agents through channels: iMessage, Telegram, the built-in dashboard. Those work great. But OpenClaw doesn't lock you into any of them.
+
+The Gateway is an open API. WebSocket, HTTP, standard protocols. You can build any interface you want on top of it. A custom dashboard. A mobile app. A Slack bot. A CLI tool. A widget on your website. Anything that can open a WebSocket or make an HTTP request can talk to your agents.
+
+This module covers everything you need:
+
+- The built-in Control UI (what you already have)
+- The Gateway WebSocket protocol (real-time, bidirectional)
+- HTTP APIs for simpler integrations (OpenAI-compatible)
+- Canvas for visual, agent-controlled surfaces
+- Practical examples you can build today
+
+## The Control UI (Built-In Dashboard)
+
+You already have a full dashboard. When you ran `openclaw init`, the Gateway started serving a browser-based Control UI on port 18789.
+
+Open it locally:
+
+```
+http://127.0.0.1:18789/
+```
+
+Or through Tailscale (if you set that up in Module 3):
+
+```
+https://your-machine-name.tailnet-name.ts.net/
+```
+
+### What the Control UI can do
+
+This isn't just a chat window. It's a full admin panel:
+
+- **Chat** with any agent, stream responses in real time, see tool calls as they happen
+- **Sessions** list with per-session thinking and verbose overrides
+- **Cron jobs** panel: create, edit, enable/disable, run, view history
+- **Channels** status: WhatsApp/Telegram/Discord/Slack connection health, QR login
+- **Skills** management: enable/disable, install new skills, manage API keys
+- **Nodes** list: see connected devices and their capabilities
+- **Config** editor: view and edit `openclaw.json` with schema validation and a form UI
+- **Exec approvals**: manage allowlists for shell command execution
+- **Logs**: live tail of gateway logs with filtering and export
+- **Debug**: health snapshots, model status, manual RPC calls
+
+The Control UI is built with Vite and Lit. It connects to the Gateway WebSocket on the same port and uses the same protocol any custom UI would use.
+
+### First-time device pairing
+
+When you connect from a new browser or device, you'll see "disconnected (1008): pairing required." This is a security feature.
+
+Approve it from the terminal:
+
+```bash
+# List pending pairing requests
+openclaw devices list
+
+# Approve by request ID
+openclaw devices approve <requestId>
+```
+
+Local connections (127.0.0.1) are auto-approved. Remote connections always need explicit approval. Each browser profile gets a unique device ID, so switching browsers means re-pairing.
+
+<Tip>
+If you set up Tailscale Serve with `gateway.auth.allowTailscale: true`, connections from your tailnet can authenticate automatically without a token. That's the smoothest setup for remote access.
+</Tip>
+
+### Reopening the dashboard anytime
+
+```bash
+openclaw dashboard
+```
+
+This copies the link, opens your browser if possible, and shows an SSH hint if you're running headless.
+
+## The Gateway WebSocket Protocol
+
+Everything in OpenClaw flows through one WebSocket connection. The Control UI uses it. The macOS app uses it. The iOS node uses it. And your custom UI can use it too.
+
+### Connection basics
+
+The Gateway listens on port 18789 (configurable). Connect with any WebSocket client:
+
+```
+ws://127.0.0.1:18789
+```
+
+Or over TLS (through Tailscale Serve):
+
+```
+wss://your-machine.tailnet-name.ts.net
+```
+
+### The handshake
+
+Every connection starts with a challenge-response handshake. The Gateway sends a challenge, and you respond with a `connect` request that includes your auth and role.
+
+Here's the flow:
+
+<Steps>
+  <Step title="Gateway sends a challenge">
+    As soon as you connect, the Gateway sends:
+    ```json
+    {
+      "type": "event",
+      "event": "connect.challenge",
+      "payload": { "nonce": "abc123...", "ts": 1737264000000 }
+    }
+    ```
+  </Step>
+  <Step title="You send the connect request">
+    Reply with your role, auth, and capabilities:
+    ```json
+    {
+      "type": "req",
+      "id": "1",
+      "method": "connect",
+      "params": {
+        "minProtocol": 3,
+        "maxProtocol": 3,
+        "client": {
+          "id": "my-custom-ui",
+          "version": "1.0.0",
+          "platform": "web",
+          "mode": "operator"
+        },
+        "role": "operator",
+        "scopes": ["operator.read", "operator.write"],
+        "caps": [],
+        "commands": [],
+        "permissions": {},
+        "auth": { "token": "your-gateway-token" }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Gateway confirms">
+    If auth succeeds:
+    ```json
+    {
+      "type": "res",
+      "id": "1",
+      "ok": true,
+      "payload": {
+        "type": "hello-ok",
+        "protocol": 3,
+        "policy": { "tickIntervalMs": 15000 }
+      }
+    }
+    ```
+    You're connected. Start sending requests.
+  </Step>
+</Steps>
+
+### Frame types
+
+The protocol uses three frame types:
+
+| Type | Direction | Purpose |
+|------|-----------|---------|
+| `req` | Client to Gateway | Send a request (chat, config, status) |
+| `res` | Gateway to Client | Response to your request |
+| `event` | Gateway to Client | Real-time updates (chat messages, status changes) |
+
+A request looks like:
+
+```json
+{
+  "type": "req",
+  "id": "unique-id",
+  "method": "chat.send",
+  "params": { "message": "Hello from my custom UI" }
+}
+```
+
+A response comes back with the same `id`:
+
+```json
+{
+  "type": "res",
+  "id": "unique-id",
+  "ok": true,
+  "payload": { "runId": "run_abc", "status": "started" }
+}
+```
+
+Events stream in as things happen:
+
+```json
+{
+  "type": "event",
+  "event": "chat",
+  "payload": { "text": "Here's my response...", "done": false }
+}
+```
+
+### Key methods
+
+Here are the methods you'll use most often:
+
+| Method | What it does |
+|--------|-------------|
+| `chat.send` | Send a message and start an agent run |
+| `chat.history` | Get conversation history |
+| `chat.abort` | Stop a running response |
+| `sessions.list` | List all active sessions |
+| `status` | Get gateway health and status |
+| `health` | Detailed health check |
+| `cron.list` | List scheduled jobs |
+| `config.get` | Read the current config |
+| `models.list` | List available models |
+
+`chat.send` is non-blocking. It immediately returns `{ runId, status: "started" }` and the actual response streams through `chat` events. This is how you build a streaming chat UI.
+
+### Roles and scopes
+
+When you connect, you declare a **role**:
+
+- **operator**: you're a control plane client (UI, CLI, automation). This is what custom dashboards use.
+- **node**: you're a capability host (camera, screen, canvas). For devices, not UIs.
+
+Operators have scopes:
+
+- `operator.read`: view status, sessions, config
+- `operator.write`: send messages, modify config
+- `operator.admin`: full access
+- `operator.approvals`: handle exec approval requests
+
+For a custom dashboard, use `operator` role with `operator.read` and `operator.write` scopes.
+
+## HTTP APIs (The Simple Path)
+
+If WebSocket feels like overkill for your integration, OpenClaw also exposes HTTP APIs. These are perfect for scripts, webhooks, one-shot automations, and integrations with tools that already speak OpenAI's protocol.
+
+### OpenAI Chat Completions API
+
+OpenClaw can serve a standard OpenAI-compatible endpoint. If you've built anything on the OpenAI API, this works the same way, but it routes through your local agent with all your tools, memory, and personality.
+
+First, enable it in your config:
+
+```json5
+{
+  gateway: {
+    http: {
+      endpoints: {
+        chatCompletions: { enabled: true }
+      }
+    }
+  }
+}
+```
+
+Then use it like any OpenAI endpoint:
+
+```bash
+curl http://127.0.0.1:18789/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_GATEWAY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openclaw",
+    "messages": [{"role": "user", "content": "What meetings do I have today?"}]
+  }'
+```
+
+With streaming:
+
+```bash
+curl -N http://127.0.0.1:18789/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_GATEWAY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openclaw",
+    "stream": true,
+    "messages": [{"role": "user", "content": "Summarize my unread emails"}]
+  }'
+```
+
+Target a specific agent by encoding it in the model field:
+
+```bash
+"model": "openclaw:work"    # Routes to your "work" agent
+"model": "openclaw:social"  # Routes to your "social" agent
+```
+
+This means any tool that integrates with OpenAI (Cursor, Continue, custom scripts) can talk to your OpenClaw agents with zero modification. Just point it at `http://127.0.0.1:18789` and set your gateway token as the API key.
+
+### OpenResponses API
+
+OpenClaw also supports the newer Responses API format:
+
+```json5
+{
+  gateway: {
+    http: {
+      endpoints: {
+        responses: { enabled: true }
+      }
+    }
+  }
+}
+```
+
+```bash
+curl http://127.0.0.1:18789/v1/responses \
+  -H "Authorization: Bearer YOUR_GATEWAY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openclaw",
+    "input": "What is the status of my agents?"
+  }'
+```
+
+The Responses API supports item-based inputs, client-side function tools, image and file uploads, and SSE streaming. It's a richer protocol than Chat Completions if your integration needs it.
+
+### Tools Invoke API
+
+This is the power move. You can call any OpenClaw tool directly via HTTP, without running a full agent turn:
+
+```bash
+curl http://127.0.0.1:18789/tools/invoke \
+  -H "Authorization: Bearer YOUR_GATEWAY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "sessions_list",
+    "args": {}
+  }'
+```
+
+This endpoint is always enabled (no config change needed). It respects the same tool policies as agent runs, so your security rules still apply.
+
+Use cases:
+
+- Build a dashboard that polls `sessions_list` for agent status
+- Create a webhook that triggers `cron` jobs
+- Write a script that reads `memory_search` results
+- Build a Slack bot that calls specific tools on demand
+
+## Canvas (Agent-Controlled Visual Surfaces)
+
+Canvas is an OpenClaw feature available on the macOS and iOS apps. It gives your agent a visual workspace: a web view that the agent can control, write to, and capture screenshots from.
+
+Think of it as a mini browser that your agent owns. It can display HTML/CSS/JS, render charts, show dashboards, or present any web content.
+
+### What the agent can do with Canvas
+
+- **Present** a panel (show the Canvas window)
+- **Navigate** to a URL or local HTML file
+- **Evaluate** JavaScript in the Canvas
+- **Snapshot** the current view (capture a screenshot)
+- **Push A2UI** components (structured UI without writing HTML)
+
+### Canvas from the CLI
+
+```bash
+# Show the Canvas panel
+openclaw nodes canvas present --node <node-id>
+
+# Navigate to a URL
+openclaw nodes canvas navigate --node <node-id> --url "https://example.com"
+
+# Navigate to a local file
+openclaw nodes canvas navigate --node <node-id> --url "/"
+
+# Run JavaScript
+openclaw nodes canvas eval --node <node-id> --js "document.title"
+
+# Take a screenshot
+openclaw nodes canvas snapshot --node <node-id>
+```
+
+### Building agent-controlled dashboards
+
+Your agent can write HTML files to the Canvas directory and then display them. Here's the pattern:
+
+1. Agent writes an HTML file to its workspace
+2. Agent navigates Canvas to that file
+3. The HTML can use JavaScript to call back to the agent via deep links
+
+Canvas files are stored at:
+
+```
+~/Library/Application Support/OpenClaw/canvas/<session>/
+```
+
+The Canvas panel serves them via a custom URL scheme: `openclaw-canvas://<session>/path`. Your agent can write a dashboard, chart, or any interactive page and display it instantly.
+
+### A2UI (Structured UI)
+
+A2UI is a structured way to push UI components to Canvas without writing HTML. It's great for quick status displays:
+
+```bash
+openclaw nodes canvas a2ui push --node <node-id> --text "Hello from your agent"
+```
+
+For more complex layouts, you push JSONL component definitions. A2UI supports columns, text, headings, and other layout primitives.
+
+<Note>
+Canvas requires the macOS or iOS app running in node mode. It's not available through the browser Control UI or terminal-only setups. If you're running OpenClaw on a headless server, use the HTTP APIs or WebSocket protocol for custom interfaces.
+</Note>
+
+## Building a Simple Dashboard (Example)
+
+Let's put this together. Here's a minimal HTML page that connects to your Gateway WebSocket, authenticates, and shows a live agent chat interface.
+
+Save this as `dashboard.html` and open it in your browser:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My OpenClaw Dashboard</title>
+  <style>
+    body { font-family: system-ui; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+    #messages { border: 1px solid #ddd; border-radius: 8px; padding: 16px;
+                height: 400px; overflow-y: auto; margin-bottom: 16px; }
+    .msg { margin: 8px 0; padding: 8px 12px; border-radius: 6px; }
+    .user { background: #e3f2fd; text-align: right; }
+    .assistant { background: #f5f5f5; }
+    #input-row { display: flex; gap: 8px; }
+    #input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+    button { padding: 10px 20px; background: #16A34A; color: white;
+             border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
+    button:hover { background: #15803D; }
+    #status { color: #666; font-size: 14px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h1>My Agent Dashboard</h1>
+  <div id="status">Connecting...</div>
+  <div id="messages"></div>
+  <div id="input-row">
+    <input id="input" placeholder="Talk to your agent..." />
+    <button onclick="send()">Send</button>
+  </div>
+
+  <script>
+    const TOKEN = 'YOUR_GATEWAY_TOKEN';
+    const WS_URL = 'ws://127.0.0.1:18789';
+
+    let ws, msgId = 0, currentResponse = '';
+    const messages = document.getElementById('messages');
+    const status = document.getElementById('status');
+    const input = document.getElementById('input');
+
+    function connect() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onmessage = (e) => {
+        const frame = JSON.parse(e.data);
+
+        // Step 1: respond to the challenge with connect
+        if (frame.type === 'event' && frame.event === 'connect.challenge') {
+          ws.send(JSON.stringify({
+            type: 'req', id: String(++msgId), method: 'connect',
+            params: {
+              minProtocol: 3, maxProtocol: 3,
+              client: { id: 'my-dashboard', version: '1.0.0',
+                        platform: 'web', mode: 'operator' },
+              role: 'operator',
+              scopes: ['operator.read', 'operator.write'],
+              caps: [], commands: [], permissions: {},
+              auth: { token: TOKEN }
+            }
+          }));
+        }
+
+        // Step 2: connection confirmed
+        if (frame.type === 'res' && frame.payload?.type === 'hello-ok') {
+          status.textContent = 'Connected';
+          status.style.color = '#16A34A';
+        }
+
+        // Step 3: handle streaming chat events
+        if (frame.type === 'event' && frame.event === 'chat') {
+          const p = frame.payload;
+          if (p.text) {
+            currentResponse += p.text;
+            updateLastAssistant(currentResponse);
+          }
+          if (p.done) currentResponse = '';
+        }
+
+        // Step 4: handle chat.send ack
+        if (frame.type === 'res' && frame.payload?.status === 'started') {
+          addMessage('assistant', '...');
+          currentResponse = '';
+        }
+      };
+
+      ws.onclose = () => {
+        status.textContent = 'Disconnected. Reconnecting...';
+        status.style.color = '#dc2626';
+        setTimeout(connect, 3000);
+      };
+    }
+
+    function send() {
+      const text = input.value.trim();
+      if (!text || !ws) return;
+      addMessage('user', text);
+      ws.send(JSON.stringify({
+        type: 'req', id: String(++msgId),
+        method: 'chat.send',
+        params: { message: text }
+      }));
+      input.value = '';
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') send();
+    });
+
+    function addMessage(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function updateLastAssistant(text) {
+      const last = messages.querySelector('.assistant:last-child');
+      if (last) last.textContent = text;
+    }
+
+    connect();
+  </script>
+</body>
+</html>
+```
+
+<Warning>
+Replace `YOUR_GATEWAY_TOKEN` with your actual gateway token. Never commit tokens to version control. In a real app, you'd prompt for the token or read it from a config file.
+</Warning>
+
+This is about 80 lines of JavaScript. No frameworks, no build tools. Open the file in a browser, and you have a working chat interface connected to your agent with all its tools, memory, and personality.
+
+From here, you could add:
+
+- A session selector (call `sessions.list` to show all active sessions)
+- Agent status cards (call `status` to get health info)
+- Cron job management (call `cron.list`, `cron.add`, etc.)
+- Tool output rendering (parse tool call events from the chat stream)
+
+## Integration Ideas
+
+The open API means you can connect OpenClaw to almost anything. Here are some practical ideas:
+
+### Raycast / Alfred Extension
+
+Build a quick-launcher extension that sends a message to your agent and shows the response in a popup. Use the Chat Completions API for the simplest integration:
+
+```bash
+curl -s http://127.0.0.1:18789/v1/chat/completions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\":\"openclaw\",\"messages\":[{\"role\":\"user\",\"content\":\"$QUERY\"}]}"
+```
+
+### Webhook Receiver
+
+Point external services at OpenClaw's webhook endpoint. When an event fires (GitHub push, Stripe payment, form submission), your agent processes it.
+
+Enable webhooks in config:
+
+```json5
+{
+  hooks: { enabled: true }
+}
+```
+
+### Home Automation
+
+Write a simple script that calls the Tools Invoke API based on sensor data. Temperature too high? Have your agent check the forecast and adjust the schedule. Package arrived? Inject a system event.
+
+### Monitoring Dashboard
+
+Use the WebSocket protocol to build a wall-mounted display showing:
+
+- Which agents are active
+- Recent tool calls
+- Cron job status
+- Channel health (is iMessage connected? Telegram?)
+
+Poll `status` and `sessions.list` periodically, and subscribe to events for real-time updates.
+
+### Slack Bot (Custom)
+
+Instead of using OpenClaw's built-in Slack channel, build a custom Slack app that calls the Chat Completions API. This gives you full control over the Slack UX: custom slash commands, interactive blocks, modal dialogs.
+
+## The Multi-Interface Philosophy
+
+This is what makes OpenClaw different from closed AI platforms. Your agent isn't trapped behind one UI.
+
+Right now, your setup might look like this:
+
+| Interface | Use case |
+|-----------|----------|
+| **iMessage** | Quick questions from your phone |
+| **Control UI** | Full admin dashboard in the browser |
+| **Telegram** | Group chat with team members |
+| **Cron delivery** | Automated reports to any channel |
+| **Custom dashboard** | Whatever you build |
+
+Every interface talks to the same agents, the same memory, the same tools. Switch between them freely. Your agent doesn't care how you reach it.
+
+And because the Gateway protocol is just JSON over WebSocket, building a new interface is a weekend project, not a platform migration.
+
+## Security Notes
+
+A few things to keep in mind when building custom interfaces:
+
+<AccordionGroup>
+  <Accordion title="Never expose the Gateway to the public internet without auth">
+    The Gateway is an admin surface. It has access to your files, tools, memory, and connected services. Always use authentication (token or password) and keep it behind Tailscale, a VPN, or at minimum a firewall.
+
+    The only safe public exposure is through Tailscale Funnel with password auth enabled:
+
+    ```json5
+    {
+      gateway: {
+        tailscale: { mode: "funnel" },
+        auth: { mode: "password" }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Token management">
+    Gateway tokens are stored in `~/.openclaw/openclaw.json`. Keep them out of version control. In custom UIs, prompt for the token at runtime or load it from a local config file.
+
+    Device tokens (issued during pairing) are scoped to the connecting device and can be revoked:
+
+    ```bash
+    openclaw devices revoke --device <id> --role operator
+    ```
+  </Accordion>
+
+  <Accordion title="Scope your connections">
+    When connecting via WebSocket, only request the scopes you need. A read-only dashboard should use `["operator.read"]`, not `["operator.admin"]`.
+  </Accordion>
+
+  <Accordion title="HTTP APIs are gated by tool policy">
+    The Tools Invoke API respects the same tool policies as agent runs. If a tool is denied in your config, it's denied via HTTP too. Your security rules carry over automatically.
+  </Accordion>
+</AccordionGroup>
+
+## What You Just Built
+
+You now understand the full surface area for building on OpenClaw:
+
+- **Control UI**: the built-in dashboard, already running at port 18789
+- **WebSocket protocol**: real-time, bidirectional, the same protocol everything uses
+- **Chat Completions API**: drop-in replacement for OpenAI, works with existing tools
+- **Responses API**: richer protocol with file/image support
+- **Tools Invoke API**: call any tool directly, no agent turn needed
+- **Canvas**: agent-controlled visual surfaces on macOS/iOS
+
+You're not limited to pre-built interfaces. OpenClaw gives you the building blocks to create exactly the experience you want.
+
+One module left. Next up: advanced patterns for memory maintenance, security hardening, and autonomous overnight work.
+
+<Card
+  title="Next: Advanced Patterns"
+  icon="arrow-right"
+  href="/tutorial/advanced-patterns"
+  horizontal
+>
+  Memory curation, security hardening, prompt injection defense, and autonomous workflows.
+</Card>

@@ -30,7 +30,8 @@
               "tutorial/heartbeats",
               "tutorial/sub-agent",
               "tutorial/multi-agent",
-              "tutorial/cron"
+              "tutorial/cron",
+              "tutorial/custom-ui"
             ]
           }
         ]
