@@ -1,7 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 48" width="300" height="48">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&amp;display=swap');
-    .wordmark { font-family: 'DM Serif Display', Georgia, serif; font-size: 40px; fill: #0F1419; letter-spacing: -0.02em; }
-  </style>
-  <text x="0" y="38" class="wordmark">OpenClaw</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" width="200" height="40">
+  <text x="0" y="30" font-family="Inter, -apple-system, sans-serif" font-size="28" font-weight="700" fill="#0A0E14" letter-spacing="-0.02em">🦞 Claw School</text>
 </svg>
